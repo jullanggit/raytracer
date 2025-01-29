@@ -1,4 +1,7 @@
-use std::fs;
+#![feature(file_buffered)]
+
+use std::fs::File;
+use std::io::Write as _;
 
 fn main() {
     let circle = Image::circle(200);
@@ -13,19 +16,15 @@ struct Image {
 }
 impl Image {
     fn write_ppm_p6(&self) {
-        let mut buf = Vec::new();
+        let mut file = File::create_buffered("out.ppm").unwrap();
 
         // Write ppm headers
-        buf.extend_from_slice(b"P6\n");
-        buf.extend_from_slice(format!("{} {} {}\n", self.width, self.height, 255).as_bytes());
+        writeln!(&mut file, "P6").unwrap();
+        writeln!(&mut file, "{} {} {}", self.width, self.height, 255).unwrap();
 
         for pixel in &self.data {
-            buf.extend_from_slice(&pixel.inner);
+            file.write_all(&pixel.inner).unwrap();
         }
-
-        assert!(self.data.len() % self.width == 0);
-
-        fs::write("out.ppm", buf).unwrap();
     }
     fn circle(radius: usize) -> Self {
         let diameter = radius * 2;
