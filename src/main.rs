@@ -2,6 +2,7 @@
 
 use std::fs::File;
 use std::io::Write as _;
+use std::mem::transmute;
 
 fn main() {
     let circle = Image::circle(200);
@@ -16,15 +17,15 @@ struct Image {
 }
 impl Image {
     fn write_ppm_p6(&self) {
-        let mut file = File::create_buffered("target/out.ppm").unwrap();
+        let mut file = File::create("target/out.ppm").unwrap();
 
-        // Write ppm headers
-        writeln!(&mut file, "P6").unwrap();
-        writeln!(&mut file, "{} {} {}", self.width, self.height, 255).unwrap();
+        // Write ppm header
+        writeln!(&mut file, "P6\n{} {} 255", self.width, self.height).unwrap();
 
-        for pixel in &self.data {
-            file.write_all(&pixel.inner).unwrap();
-        }
+        // SAFETY:
+        // Pixel is just a [u8;3], so &self.data is a &[[u8;3]], which can be safely flattened to a &[u8]
+        file.write_all(unsafe { transmute::<&[Pixel], &[u8]>(&self.data) }) // For some reason not yet supported by TransmuteFrom
+            .unwrap();
 
         file.flush().unwrap();
     }
