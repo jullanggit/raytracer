@@ -2,7 +2,7 @@
 
 use std::fs::File;
 use std::io::Write as _;
-use std::mem::transmute;
+use std::slice;
 
 fn main() {
     let circle = Image::circle(200);
@@ -23,9 +23,17 @@ impl Image {
         writeln!(&mut file, "P6\n{} {} 255", self.width, self.height).unwrap();
 
         // SAFETY:
-        // Pixel is just a [u8;3], so &self.data is a &[[u8;3]], which can be safely flattened to a &[u8]
-        file.write_all(unsafe { transmute::<&[Pixel], &[u8]>(&self.data) }) // For some reason not yet supported by TransmuteFrom
-            .unwrap();
+        // - `Pixel` is a `repr(transparent)` wrapper around [u8;3],
+        // - so `self.data` is effectively a &[[u8;3]]
+        // - [u8;3] and u8 have the same alignment
+        // - We adjust the length of the resulting slice
+        file.write_all(unsafe {
+            slice::from_raw_parts(
+                self.data.as_ptr().cast::<u8>(),
+                self.data.len() * size_of::<Pixel>(),
+            )
+        })
+        .unwrap();
 
         file.flush().unwrap();
     }
@@ -57,12 +65,9 @@ impl Image {
     }
 }
 
-struct Pixel {
-    inner: [u8; 3],
-}
+#[repr(transparent)]
+struct Pixel([u8; 3]);
 impl Pixel {
-    const WHITE: Self = Self {
-        inner: [u8::MAX; 3],
-    };
-    const BLACK: Self = Self { inner: [0; 3] };
+    const WHITE: Self = Self([u8::MAX; 3]);
+    const BLACK: Self = Self([0; 3]);
 }
