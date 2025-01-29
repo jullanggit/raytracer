@@ -1,8 +1,8 @@
-use std::{fs, io::Write, mem::transmute};
+use std::fs;
 
 fn main() {
     let circle = Image::circle(30);
-    circle.write();
+    circle.write_ppm_p6();
 }
 
 struct Image {
@@ -12,13 +12,18 @@ struct Image {
     data: Vec<Pixel>,
 }
 impl Image {
-    fn write(&self) {
+    fn write_ppm_p6(&self) {
         let mut buf = Vec::new();
 
-        writeln!(&mut buf, "P6").unwrap();
-        writeln!(&mut buf, "{} {}", self.width, self.height).unwrap();
-        buf.write_all(unsafe { transmute::<&[Pixel], &[u8]>(&self.data) }) // For some reason not yet supported by TransmuteFrom
-            .unwrap();
+        // Write ppm headers
+        buf.extend_from_slice(b"P6\n");
+        buf.extend_from_slice(format!("{} {} {}\n", self.width, self.height, 255).as_bytes());
+
+        for pixel in &self.data {
+            buf.extend_from_slice(&pixel.inner);
+        }
+
+        assert!(self.data.len() % self.width as usize == 0);
 
         fs::write("out.ppm", buf).unwrap();
     }
@@ -28,10 +33,13 @@ impl Image {
 
         for x in 0..diameter {
             for y in 0..diameter {
-                if x * x + y * y < radius * radius {
+                let dx = x as isize - radius as isize; // Center x
+                let dy = y as isize - radius as isize; // Center y
+
+                if dx * dx + dy * dy < (radius * radius) as isize {
                     data.push(Pixel::WHITE);
                 } else {
-                    data.push(Pixel::BLACK)
+                    data.push(Pixel::BLACK);
                 }
             }
         }
@@ -47,7 +55,6 @@ impl Image {
     }
 }
 
-#[repr(C)]
 struct Pixel {
     inner: [u8; 3],
 }
