@@ -39,7 +39,7 @@ impl Image {
     }
     fn circle(radius: usize) -> Self {
         let diameter = radius * 2;
-        let mut data = Vec::with_capacity(diameter * diameter * 3);
+        let mut data = Vec::with_capacity(diameter * diameter);
 
         for x in 0..diameter {
             for y in 0..diameter {
