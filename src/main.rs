@@ -16,7 +16,7 @@ struct Image {
 }
 impl Image {
     fn write_ppm_p6(&self) {
-        let mut file = File::create_buffered("out.ppm").unwrap();
+        let mut file = File::create_buffered("target/out.ppm").unwrap();
 
         // Write ppm headers
         writeln!(&mut file, "P6").unwrap();
@@ -25,6 +25,8 @@ impl Image {
         for pixel in &self.data {
             file.write_all(&pixel.inner).unwrap();
         }
+
+        file.flush().unwrap();
     }
     fn circle(radius: usize) -> Self {
         let diameter = radius * 2;
