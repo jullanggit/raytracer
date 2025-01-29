@@ -33,10 +33,10 @@ impl Image {
 
         for x in 0..diameter {
             for y in 0..diameter {
-                let dx = x as isize - radius as isize; // Center x
-                let dy = y as isize - radius as isize; // Center y
+                let dx = x.abs_diff(radius);
+                let dy = y.abs_diff(radius);
 
-                if dx * dx + dy * dy < (radius * radius) as isize {
+                if dx * dx + dy * dy < radius * radius {
                     data.push(Pixel::WHITE);
                 } else {
                     data.push(Pixel::BLACK);
