@@ -1,13 +1,13 @@
 use std::fs;
 
 fn main() {
-    let circle = Image::circle(30);
+    let circle = Image::circle(200);
     circle.write_ppm_p6();
 }
 
 struct Image {
-    width: u16,
-    height: u16,
+    width: usize,
+    height: usize,
 
     data: Vec<Pixel>,
 }
@@ -23,13 +23,13 @@ impl Image {
             buf.extend_from_slice(&pixel.inner);
         }
 
-        assert!(self.data.len() % self.width as usize == 0);
+        assert!(self.data.len() % self.width == 0);
 
         fs::write("out.ppm", buf).unwrap();
     }
-    fn circle(radius: u16) -> Self {
+    fn circle(radius: usize) -> Self {
         let diameter = radius * 2;
-        let mut data = Vec::with_capacity((diameter * diameter * 3) as usize);
+        let mut data = Vec::with_capacity(diameter * diameter * 3);
 
         for x in 0..diameter {
             for y in 0..diameter {
@@ -50,8 +50,8 @@ impl Image {
             data,
         }
     }
-    fn flatten_indices(&self, x: usize, y: usize) -> usize {
-        x + y * self.width as usize
+    const fn flatten_indices(&self, x: usize, y: usize) -> usize {
+        x + y * self.width
     }
 }
 
