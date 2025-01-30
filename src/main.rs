@@ -2,10 +2,13 @@
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
+mod vec3;
+
 use std::fs::File;
 use std::io::Write as _;
-use std::ops::{Add, Div, Mul, Sub};
 use std::slice;
+
+use vec3::{NormalizedVec3, Vec3};
 
 fn main() {
     let screen = Screen::new(
@@ -63,56 +66,6 @@ impl Image {
 #[repr(transparent)]
 struct Pixel([u8; 3]);
 
-#[derive(Clone, Copy, Debug)]
-/// A right-handed cartesian coordinate
-struct Vec3 {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-impl Vec3 {
-    const fn new(x: f32, y: f32, z: f32) -> Self {
-        Self { x, y, z }
-    }
-    fn dot(self, rhs: Self) -> f32 {
-        self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
-    }
-    fn length(&self) -> f32 {
-        self.dot(*self).sqrt()
-    }
-    fn normalize(self) -> NormalizedVec3 {
-        NormalizedVec3(self / self.length())
-    }
-}
-impl Add for Vec3 {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        Self::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
-    }
-}
-impl Sub for Vec3 {
-    type Output = Self;
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
-    }
-}
-impl Div<f32> for Vec3 {
-    type Output = Self;
-    fn div(self, rhs: f32) -> Self::Output {
-        Self::new(self.x / rhs, self.y / rhs, self.z / rhs)
-    }
-}
-impl Mul<f32> for Vec3 {
-    type Output = Self;
-    fn mul(self, rhs: f32) -> Self::Output {
-        Self::new(self.x * rhs, self.y * rhs, self.z * rhs)
-    }
-}
-
-#[derive(Debug)]
-#[repr(transparent)]
-struct NormalizedVec3(Vec3);
-
 struct Sphere {
     center: Vec3,
     radius: f32,
@@ -143,7 +96,7 @@ impl Intersects for Sphere {
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let delta_origin = ray.origin - self.center;
 
-        let delta_origin_direction = delta_origin.dot(ray.direction.0);
+        let delta_origin_direction = delta_origin.dot(*ray.direction.inner());
         let discriminant = delta_origin_direction * delta_origin_direction
             - delta_origin.dot(delta_origin)
             + self.radius * self.radius;
