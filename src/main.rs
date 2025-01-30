@@ -145,3 +145,54 @@ impl Intersects for Sphere {
         }
     }
 }
+
+struct Scene {
+    screen: Screen,
+    camera: Camera,
+    sphere: Sphere,
+}
+
+impl Scene {
+    const fn new(screen: Screen, camera: Camera, sphere: Sphere) -> Self {
+        Self {
+            screen,
+            camera,
+            sphere,
+        }
+    }
+}
+
+struct Screen {
+    center: Vec3,
+    width: f32,
+    height: f32,
+    resolution_width: u32,
+    resolution_height: u32,
+}
+impl Screen {
+    const fn new(
+        center: Vec3,
+        width: f32,
+        height: f32,
+        resolution_width: u32,
+        resolution_height: u32,
+    ) -> Self {
+        Self {
+            center,
+            width,
+            height,
+            resolution_width,
+            resolution_height,
+        }
+    }
+}
+
+struct Camera {
+    position: Vec3,
+}
+
+impl Camera {
+    const fn new(position: Vec3) -> Self {
+        Self { position }
+    }
+}
