@@ -74,7 +74,3 @@ impl Image {
 
 #[repr(transparent)]
 struct Pixel([u8; 3]);
-impl Pixel {
-    const WHITE: Self = Self([u8::MAX; 3]);
-    const BLACK: Self = Self([0; 3]);
-}
