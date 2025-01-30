@@ -186,7 +186,7 @@ impl Intersects for Sphere {
         }
 
         // The first intersection point
-        let t1 = -delta_origin_direction - 2. * discriminant.sqrt();
+        let t1 = -delta_origin_direction - discriminant.sqrt();
 
         // If t1 is positive (in front of the origin), return it, as
         // t1 is always closer than t2, because we subtract,
@@ -195,7 +195,7 @@ impl Intersects for Sphere {
             Some(t1)
         } else {
             // The second intersection point
-            let t2 = -delta_origin_direction + 2. * discriminant.sqrt();
+            let t2 = -delta_origin_direction + discriminant.sqrt();
 
             // If t2 is positive, return it, else None
             (t2 > 0.0).then_some(t2)
