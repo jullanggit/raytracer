@@ -98,6 +98,7 @@ impl Image {
 struct Pixel([u8; 3]);
 
 #[derive(Clone, Copy, Debug)]
+/// A right-handed cartesian coordinate
 struct Vec3 {
     x: f32,
     y: f32,
