@@ -9,14 +9,14 @@ use std::slice;
 
 fn main() {
     let screen = Screen::new(
-        Vec3::new(-50., 50., 10.),
-        Vec3::new(100., 0., 0.),
-        Vec3::new(0., -100., 0.),
+        Vec3::new(-0.5, 0.5, 10.),
+        Vec3::new(1., 0., 0.),
+        Vec3::new(0., -1., 0.),
         100,
         100,
     );
     let camera = Camera::new(Vec3::new(0., 0., -20.));
-    let sphere = Sphere::new(Vec3::new(0., 0., 0.), 10.);
+    let sphere = Sphere::new(Vec3::new(0., 0., 0.), 1.);
     let scene = Scene::new(screen, camera, sphere);
     let image = scene.render();
     image.write_ppm_p6();
@@ -97,7 +97,7 @@ impl Image {
 #[repr(transparent)]
 struct Pixel([u8; 3]);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Vec3 {
     x: f32,
     y: f32,
@@ -109,6 +109,12 @@ impl Vec3 {
     }
     fn dot(self, rhs: Self) -> f32 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
+    }
+    fn length(&self) -> f32 {
+        self.dot(*self).sqrt()
+    }
+    fn normalize(self) -> NormalizedVec3 {
+        NormalizedVec3(self / self.length())
     }
 }
 impl Add for Vec3 {
@@ -136,6 +142,10 @@ impl Mul<f32> for Vec3 {
     }
 }
 
+#[derive(Debug)]
+#[repr(transparent)]
+struct NormalizedVec3(Vec3);
+
 struct Sphere {
     center: Vec3,
     radius: f32,
@@ -146,13 +156,13 @@ impl Sphere {
     }
 }
 
+#[derive(Debug)]
 struct Ray {
     origin: Vec3,
-    // A normalized Vec3
-    direction: Vec3,
+    direction: NormalizedVec3,
 }
 impl Ray {
-    fn new(origin: Vec3, direction: Vec3) -> Self {
+    const fn new(origin: Vec3, direction: NormalizedVec3) -> Self {
         Self { origin, direction }
     }
 }
@@ -166,7 +176,7 @@ impl Intersects for Sphere {
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let delta_origin = ray.origin - self.center;
 
-        let delta_origin_direction = delta_origin.dot(ray.direction);
+        let delta_origin_direction = delta_origin.dot(ray.direction.0);
         let discriminant = delta_origin_direction * delta_origin_direction
             - delta_origin.dot(delta_origin)
             + self.radius * self.radius;
@@ -216,7 +226,11 @@ impl Scene {
             for x in 0..self.screen.resolution_width {
                 let pixel_position =
                     self.screen.top_left + row_step * x as f32 + column_step * y as f32;
-                let ray = Ray::new(self.camera.position, pixel_position - self.camera.position);
+
+                let ray = Ray::new(
+                    self.camera.position,
+                    (pixel_position - self.camera.position).normalize(),
+                );
 
                 if self.sphere.intersects(&ray).is_some() {
                     image.data.push(Pixel([255, 255, 255]));
