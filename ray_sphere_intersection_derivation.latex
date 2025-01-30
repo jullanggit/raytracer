@@ -4,8 +4,9 @@
 t^2 + t \cdot 2 \cdot \vec{C} \bullet \vec{d} + \vec{C} \bullet \vec{C} - r^2 = 0 \\
 t^2 \cdot a + t \cdot b +c = 0 \\
 t = \frac{-b \pm \sqrt{b^2 -4ac}}{2a} \\
-t = \frac{-2 \cdot \vec{C} \bullet \vec{d} \pm \sqrt{(2 \cdot \vec{C} \bullet \vec{d})^2 -4 (\vec{C} \bullet \vec{C} - r^2) }}{2} \\
-t = -\vec{C} \bullet \vec{d} \pm \sqrt{(2 \cdot \vec{C} \bullet \vec{d})^2 -4 (\vec{C} \bullet \vec{C} - r^2) } \\
-t = -\vec{C} \bullet \vec{d} \pm \sqrt{4(\vec{C} \bullet \vec{d})^2 -4 (\vec{C} \bullet \vec{C} - r^2) } \\
-t = -\vec{C} \bullet \vec{d} \pm \sqrt{4((\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2)} \\
-t = -\vec{C} \bullet \vec{d} \pm 2\sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2} \\
+= \frac{-2 \cdot \vec{C} \bullet \vec{d} \pm \sqrt{(2 \cdot \vec{C} \bullet \vec{d})^2 -4 (\vec{C} \bullet \vec{C} - r^2) }}{2} \\
+= \frac{-2 \cdot \vec{C} \bullet \vec{d} \pm \sqrt{4(\vec{C} \bullet \vec{d})^2 -4 (\vec{C} \bullet \vec{C} - r^2) }}{2} \\
+= \frac{-2 \cdot \vec{C} \bullet \vec{d} \pm \sqrt{4((\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2)}}{2} \\
+= \frac{-2 \cdot \vec{C} \bullet \vec{d} \pm 2\sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2}}{2} \\
+= \frac{2\left(-\vec{C} \bullet \vec{d} \pm \sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2}\right)}{2} \\
+= -\vec{C} \bullet \vec{d} \pm \sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2} \\
