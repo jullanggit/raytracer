@@ -12,8 +12,8 @@ fn main() {
         Vec3::new(-0.5, 0.5, 10.),
         Vec3::new(1., 0., 0.),
         Vec3::new(0., -1., 0.),
-        100,
-        100,
+        1000,
+        1000,
     );
     let camera = Camera::new(Vec3::new(0., 0., 20.));
     let sphere = Sphere::new(Vec3::new(0., 0., 0.), 1.);
@@ -57,9 +57,6 @@ impl Image {
         .unwrap();
 
         file.flush().unwrap();
-    }
-    const fn flatten_indices(&self, x: usize, y: usize) -> usize {
-        x + y * self.width
     }
 }
 
