@@ -184,6 +184,8 @@ impl Scene {
             sphere,
         }
     }
+    // The only precision loss is turning the resolution into floats, which is fine
+    #[expect(clippy::cast_precision_loss)]
     fn render(&self) -> Image {
         let row_step = self.screen.top_edge / self.screen.resolution_width as f32;
         let column_step = self.screen.left_edge / self.screen.resolution_height as f32;
