@@ -15,7 +15,7 @@ fn main() {
         100,
         100,
     );
-    let camera = Camera::new(Vec3::new(0., 0., -20.));
+    let camera = Camera::new(Vec3::new(0., 0., 20.));
     let sphere = Sphere::new(Vec3::new(0., 0., 0.), 1.);
     let scene = Scene::new(screen, camera, sphere);
     let image = scene.render();
