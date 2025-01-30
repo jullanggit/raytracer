@@ -37,7 +37,6 @@ impl Image {
             data,
         }
     }
-
     fn write_ppm_p6(&self) {
         let mut file = File::create("target/out.ppm").unwrap();
 
@@ -58,36 +57,6 @@ impl Image {
         .unwrap();
 
         file.flush().unwrap();
-    }
-    #[expect(clippy::cast_precision_loss)]
-    #[expect(clippy::cast_possible_truncation)]
-    #[expect(clippy::cast_sign_loss)]
-    fn circle(radius: usize) -> Self {
-        let diameter = radius * 2;
-        let mut data = Vec::with_capacity(diameter * diameter);
-
-        let color_scale = 255. / diameter as f32;
-
-        for x in 0..diameter {
-            for y in 0..diameter {
-                let dx = x.abs_diff(radius);
-                let dy = y.abs_diff(radius);
-
-                let color_x = (x as f32 * color_scale) as u8;
-                let color_y = (y as f32 * color_scale) as u8;
-                if dx * dx + dy * dy < radius * radius {
-                    data.push(Pixel([color_x, 0, color_y]));
-                } else {
-                    data.push(Pixel([color_y, 0, color_x]));
-                }
-            }
-        }
-
-        Self {
-            width: diameter,
-            height: diameter,
-            data,
-        }
     }
     const fn flatten_indices(&self, x: usize, y: usize) -> usize {
         x + y * self.width
