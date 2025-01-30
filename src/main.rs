@@ -1,4 +1,6 @@
 #![feature(file_buffered)]
+// TODO: Remove this when optimising
+#![allow(clippy::suboptimal_flops)]
 
 use std::fs::File;
 use std::io::Write as _;
@@ -137,7 +139,7 @@ impl Intersects for Sphere {
             // The second intersection point
             let t2 = -b + discriminant.sqrt();
 
-            if t2 > 0.0 { Some(t2) } else { None }
+            (t2 > 0.0).then_some(t2)
         }
     }
 }
