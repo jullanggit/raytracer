@@ -4,12 +4,22 @@
 
 use std::fs::File;
 use std::io::Write as _;
-use std::ops::Sub;
+use std::ops::{Add, Div, Mul, Sub};
 use std::slice;
 
 fn main() {
-    let circle = Image::circle(200);
-    circle.write_ppm_p6();
+    let screen = Screen::new(
+        Vec3::new(-50., 50., 10.),
+        Vec3::new(100., 0., 0.),
+        Vec3::new(0., -100., 0.),
+        100,
+        100,
+    );
+    let camera = Camera::new(Vec3::new(0., 0., -20.));
+    let sphere = Sphere::new(Vec3::new(0., 0., 0.), 10.);
+    let scene = Scene::new(screen, camera, sphere);
+    let image = scene.render();
+    image.write_ppm_p6();
 }
 
 struct Image {
@@ -19,6 +29,15 @@ struct Image {
     data: Vec<Pixel>,
 }
 impl Image {
+    fn new(width: usize, height: usize) -> Self {
+        let data = Vec::with_capacity(width * height);
+        Self {
+            width,
+            height,
+            data,
+        }
+    }
+
     fn write_ppm_p6(&self) {
         let mut file = File::create("target/out.ppm").unwrap();
 
@@ -92,10 +111,28 @@ impl Vec3 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
     }
 }
+impl Add for Vec3 {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
+    }
+}
 impl Sub for Vec3 {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
         Self::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+    }
+}
+impl Div<f32> for Vec3 {
+    type Output = Self;
+    fn div(self, rhs: f32) -> Self::Output {
+        Self::new(self.x / rhs, self.y / rhs, self.z / rhs)
+    }
+}
+impl Mul<f32> for Vec3 {
+    type Output = Self;
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self::new(self.x * rhs, self.y * rhs, self.z * rhs)
     }
 }
 
@@ -103,11 +140,21 @@ struct Sphere {
     center: Vec3,
     radius: f32,
 }
+impl Sphere {
+    const fn new(center: Vec3, radius: f32) -> Self {
+        Self { center, radius }
+    }
+}
 
 struct Ray {
     origin: Vec3,
     // A normalized Vec3
     direction: Vec3,
+}
+impl Ray {
+    fn new(origin: Vec3, direction: Vec3) -> Self {
+        Self { origin, direction }
+    }
 }
 
 trait Intersects {
@@ -160,27 +207,47 @@ impl Scene {
             sphere,
         }
     }
+    fn render(&self) -> Image {
+        let row_step = self.screen.top_edge / self.screen.resolution_width as f32;
+        let column_step = self.screen.left_edge / self.screen.resolution_height as f32;
+
+        let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
+        for y in 0..self.screen.resolution_height {
+            for x in 0..self.screen.resolution_width {
+                let pixel_position =
+                    self.screen.top_left + row_step * x as f32 + column_step * y as f32;
+                let ray = Ray::new(self.camera.position, pixel_position - self.camera.position);
+
+                if self.sphere.intersects(&ray).is_some() {
+                    image.data.push(Pixel([255, 255, 255]));
+                } else {
+                    image.data.push(Pixel([0, 0, 0]));
+                }
+            }
+        }
+        image
+    }
 }
 
 struct Screen {
-    center: Vec3,
-    width: f32,
-    height: f32,
-    resolution_width: u32,
-    resolution_height: u32,
+    top_left: Vec3,
+    top_edge: Vec3,
+    left_edge: Vec3,
+    resolution_width: usize,
+    resolution_height: usize,
 }
 impl Screen {
     const fn new(
-        center: Vec3,
-        width: f32,
-        height: f32,
-        resolution_width: u32,
-        resolution_height: u32,
+        top_left: Vec3,
+        top_edge: Vec3,
+        left_edge: Vec3,
+        resolution_width: usize,
+        resolution_height: usize,
     ) -> Self {
         Self {
-            center,
-            width,
-            height,
+            top_left,
+            top_edge,
+            left_edge,
             resolution_width,
             resolution_height,
         }
