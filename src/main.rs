@@ -37,6 +37,9 @@ impl Image {
 
         file.flush().unwrap();
     }
+    #[expect(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_sign_loss)]
     fn circle(radius: usize) -> Self {
         let diameter = radius * 2;
         let mut data = Vec::with_capacity(diameter * diameter);
