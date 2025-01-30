@@ -115,30 +115,32 @@ trait Intersects {
     fn intersects(&self, ray: &Ray) -> Option<f32>;
 }
 impl Intersects for Sphere {
+    // See `ray_sphere_intersection_derivation.latex` for the formula used here
     fn intersects(&self, ray: &Ray) -> Option<f32> {
-        let origin_to_center = ray.origin - self.center;
+        let delta_origin = ray.origin - self.center;
 
-        // The direction is normalized, so a=1
-        let b = origin_to_center.dot(ray.direction);
-        let c = origin_to_center.dot(origin_to_center) - self.radius * self.radius;
-
-        let discriminant = 4.0 * (b * b - c);
+        let delta_origin_direction = delta_origin.dot(ray.direction);
+        let discriminant = delta_origin_direction * delta_origin_direction
+            - delta_origin.dot(delta_origin)
+            + self.radius * self.radius;
 
         if discriminant < 0.0 {
             return None; // No solution to quadratic formula
         }
 
         // The first intersection point
-        let t1 = -b - discriminant.sqrt();
+        let t1 = -delta_origin_direction - 2. * discriminant.sqrt();
 
-        // If t1 is positive (in front of the origin), return it
-        // t1 is always <= t2, because we subtract, instead of add the discriminant (always positive)
+        // If t1 is positive (in front of the origin), return it, as
+        // t1 is always closer than t2, because we subtract,
+        // instead of add the discriminant (which is always positive)
         if t1 > 0.0 {
             Some(t1)
         } else {
             // The second intersection point
-            let t2 = -b + discriminant.sqrt();
+            let t2 = -delta_origin_direction + 2. * discriminant.sqrt();
 
+            // If t2 is positive, return it, else None
             (t2 > 0.0).then_some(t2)
         }
     }
