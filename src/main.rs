@@ -2,6 +2,7 @@
 
 use std::fs::File;
 use std::io::Write as _;
+use std::ops::Sub;
 use std::slice;
 
 fn main() {
@@ -74,3 +75,69 @@ impl Image {
 
 #[repr(transparent)]
 struct Pixel([u8; 3]);
+
+#[derive(Clone, Copy)]
+struct Vec3 {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+impl Vec3 {
+    const fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+    fn dot(self, rhs: Self) -> f32 {
+        self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
+    }
+}
+impl Sub for Vec3 {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+    }
+}
+
+struct Sphere {
+    center: Vec3,
+    radius: f32,
+}
+
+struct Ray {
+    origin: Vec3,
+    // A normalized Vec3
+    direction: Vec3,
+}
+
+trait Intersects {
+    /// The scale at which the ray intersects the object
+    fn intersects(&self, ray: &Ray) -> Option<f32>;
+}
+impl Intersects for Sphere {
+    fn intersects(&self, ray: &Ray) -> Option<f32> {
+        let origin_to_center = ray.origin - self.center;
+
+        // The direction is normalized, so a=1
+        let b = origin_to_center.dot(ray.direction);
+        let c = origin_to_center.dot(origin_to_center) - self.radius * self.radius;
+
+        let discriminant = 4.0 * (b * b - c);
+
+        if discriminant < 0.0 {
+            return None; // No solution to quadratic formula
+        }
+
+        // The first intersection point
+        let t1 = -b - discriminant.sqrt();
+
+        // If t1 is positive (in front of the origin), return it
+        // t1 is always <= t2, because we subtract, instead of add the discriminant (always positive)
+        if t1 > 0.0 {
+            Some(t1)
+        } else {
+            // The second intersection point
+            let t2 = -b + discriminant.sqrt();
+
+            if t2 > 0.0 { Some(t2) } else { None }
+        }
+    }
+}
