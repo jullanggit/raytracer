@@ -1,12 +1,9 @@
-#![feature(file_buffered)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
 mod vec3;
 
-use std::fs::File;
-use std::io::Write as _;
-use std::slice;
+use std::{fs::File, io::Write as _, mem::size_of, slice};
 
 use vec3::{NormalizedVec3, Vec3};
 
@@ -140,8 +137,8 @@ impl Scene {
     // The only precision loss is turning the resolution into floats, which is fine
     #[expect(clippy::cast_precision_loss)]
     fn render(&self) -> Image {
-        let row_step = self.screen.top_edge / self.screen.resolution_width as f32;
-        let column_step = self.screen.left_edge / self.screen.resolution_height as f32;
+        let row_step = self.screen.top_edge / (self.screen.resolution_width - 1) as f32;
+        let column_step = self.screen.left_edge / (self.screen.resolution_height - 1) as f32;
 
         let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
         for y in 0..self.screen.resolution_height {
