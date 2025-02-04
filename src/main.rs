@@ -16,8 +16,11 @@ fn main() {
         1000,
     );
     let camera = Camera::new(Vec3::new(0., 0., 20.));
-    let sphere = Sphere::new(Vec3::new(0., 0., 0.), 1.);
-    let scene = Scene::new(screen, camera, sphere);
+    let spheres = vec![
+        Sphere::new(Vec3::new(0., 0., 0.), 1., Color([255, 0, 0])),
+        Sphere::new(Vec3::new(0.5, 0., 2.), 0.5, Color([0, 0, 255])),
+    ];
+    let scene = Scene::new(screen, camera, spheres);
     let image = scene.render();
     image.write_ppm_p6();
 }
@@ -26,7 +29,7 @@ struct Image {
     width: usize,
     height: usize,
 
-    data: Vec<Pixel>,
+    data: Vec<Color>,
 }
 impl Image {
     fn new(width: usize, height: usize) -> Self {
@@ -51,7 +54,7 @@ impl Image {
         file.write_all(unsafe {
             slice::from_raw_parts(
                 self.data.as_ptr().cast::<u8>(),
-                self.data.len() * size_of::<Pixel>(),
+                self.data.len() * size_of::<Color>(),
             )
         })
         .unwrap();
@@ -60,16 +63,23 @@ impl Image {
     }
 }
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
-struct Pixel([u8; 3]);
+/// A rgb color
+struct Color([u8; 3]);
 
 struct Sphere {
     center: Vec3,
     radius: f32,
+    color: Color,
 }
 impl Sphere {
-    const fn new(center: Vec3, radius: f32) -> Self {
-        Self { center, radius }
+    const fn new(center: Vec3, radius: f32, color: Color) -> Self {
+        Self {
+            center,
+            radius,
+            color,
+        }
     }
 }
 
@@ -123,15 +133,15 @@ impl Intersects for Sphere {
 struct Scene {
     screen: Screen,
     camera: Camera,
-    sphere: Sphere,
+    spheres: Vec<Sphere>,
 }
 
 impl Scene {
-    const fn new(screen: Screen, camera: Camera, sphere: Sphere) -> Self {
+    const fn new(screen: Screen, camera: Camera, spheres: Vec<Sphere>) -> Self {
         Self {
             screen,
             camera,
-            sphere,
+            spheres,
         }
     }
     // The only precision loss is turning the resolution into floats, which is fine
@@ -151,11 +161,18 @@ impl Scene {
                     (pixel_position - self.camera.position).normalize(),
                 );
 
-                if self.sphere.intersects(&ray).is_some() {
-                    image.data.push(Pixel([255, 255, 255]));
-                } else {
-                    image.data.push(Pixel([0, 0, 0]));
+                let mut closest_hit = None;
+                let mut color = Color([0; 3]);
+
+                for sphere in &self.spheres {
+                    if let Some(hit) = sphere.intersects(&ray) {
+                        if closest_hit.is_none_or(|prev| hit < prev) {
+                            closest_hit = Some(hit);
+                            color = sphere.color;
+                        }
+                    }
                 }
+                image.data.push(color);
             }
         }
         image
