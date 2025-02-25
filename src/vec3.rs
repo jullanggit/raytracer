@@ -1,7 +1,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
 /// A right-handed cartesian coordinate
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,

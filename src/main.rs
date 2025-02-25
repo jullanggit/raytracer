@@ -64,7 +64,7 @@ impl Image {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 /// A rgb color
 /// for Color<f32> values should be between 0 and 1
@@ -94,6 +94,7 @@ impl From<Color<f32>> for Color<u8> {
     }
 }
 
+#[derive(PartialEq)]
 struct Sphere {
     center: Vec3,
     radius: f32,
@@ -199,7 +200,7 @@ impl Scene {
                             .partial_cmp(&distance2)
                             .expect("Ordering between distances should exist")
                     }) {
-                    let hit_point = *ray.direction.inner() * distance;
+                    let hit_point = ray.origin + *ray.direction.inner() * distance;
 
                     let normal = (hit_point - sphere.center).normalize();
 
@@ -210,12 +211,14 @@ impl Scene {
                     if self
                         .spheres
                         .iter()
+                        .filter(|&other_sphere| *other_sphere != *sphere)
                         .any(|sphere| sphere.intersects(&light_ray).is_some())
                     {
                         Color([0; 3])
                     } else {
                         // How straight the light is falling on the surface
-                        let color_coefficient = normal.inner().dot(*light_direction.inner());
+                        let color_coefficient =
+                            light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
 
                         (self.light.color * sphere.color * color_coefficient).into()
                     }
