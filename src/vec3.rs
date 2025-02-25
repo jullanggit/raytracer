@@ -51,7 +51,7 @@ impl Mul<f32> for Vec3 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 pub struct NormalizedVec3(Vec3);
 impl NormalizedVec3 {

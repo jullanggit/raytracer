@@ -3,7 +3,7 @@
 
 mod vec3;
 
-use std::{fs::File, io::Write as _, mem::size_of, slice};
+use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
 
 use vec3::{NormalizedVec3, Vec3};
 
@@ -17,10 +17,11 @@ fn main() {
     );
     let camera = Camera::new(Vec3::new(0., 0., 20.));
     let spheres = vec![
-        Sphere::new(Vec3::new(0., 0., 0.), 1., Color([255, 0, 0])),
-        Sphere::new(Vec3::new(0.5, 0., 2.), 0.5, Color([0, 0, 255])),
+        Sphere::new(Vec3::new(0., 0., 0.), 1., Color([1., 0., 0.])),
+        Sphere::new(Vec3::new(0.5, 0., 2.), 0.5, Color([0., 0., 1.])),
     ];
-    let scene = Scene::new(screen, camera, spheres);
+    let light = Light::new(Vec3::new(0., 2., 0.), Color([1., 1., 1.]));
+    let scene = Scene::new(screen, camera, spheres, light);
     let image = scene.render();
     image.write_ppm_p6();
 }
@@ -29,7 +30,7 @@ struct Image {
     width: usize,
     height: usize,
 
-    data: Vec<Color>,
+    data: Vec<Color<u8>>,
 }
 impl Image {
     fn new(width: usize, height: usize) -> Self {
@@ -54,7 +55,7 @@ impl Image {
         file.write_all(unsafe {
             slice::from_raw_parts(
                 self.data.as_ptr().cast::<u8>(),
-                self.data.len() * size_of::<Color>(),
+                self.data.len() * size_of::<Color<u8>>(),
             )
         })
         .unwrap();
@@ -66,15 +67,40 @@ impl Image {
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 /// A rgb color
-struct Color([u8; 3]);
+/// for Color<f32> values should be between 0 and 1
+struct Color<T>([T; 3]);
+
+impl Mul for Color<f32> {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self(array::from_fn(|index| self.0[index] * rhs.0[index]))
+    }
+}
+impl Mul<f32> for Color<f32> {
+    type Output = Self;
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self(self.0.map(|num| num * rhs))
+    }
+}
+impl From<Color<f32>> for Color<u8> {
+    #[expect(clippy::cast_possible_truncation)] // We check in debug mode
+    #[expect(clippy::cast_sign_loss)]
+    fn from(value: Color<f32>) -> Self {
+        Self(value.0.map(|num| {
+            debug_assert!((0.0..1.).contains(&num));
+
+            (num * 255.) as u8
+        }))
+    }
+}
 
 struct Sphere {
     center: Vec3,
     radius: f32,
-    color: Color,
+    color: Color<f32>,
 }
 impl Sphere {
-    const fn new(center: Vec3, radius: f32, color: Color) -> Self {
+    const fn new(center: Vec3, radius: f32, color: Color<f32>) -> Self {
         Self {
             center,
             radius,
@@ -134,14 +160,16 @@ struct Scene {
     screen: Screen,
     camera: Camera,
     spheres: Vec<Sphere>,
+    light: Light,
 }
 
 impl Scene {
-    const fn new(screen: Screen, camera: Camera, spheres: Vec<Sphere>) -> Self {
+    const fn new(screen: Screen, camera: Camera, spheres: Vec<Sphere>, light: Light) -> Self {
         Self {
             screen,
             camera,
             spheres,
+            light,
         }
     }
     // The only precision loss is turning the resolution into floats, which is fine
@@ -161,17 +189,40 @@ impl Scene {
                     (pixel_position - self.camera.position).normalize(),
                 );
 
-                let mut closest_hit = None;
-                let mut color = Color([0; 3]);
+                // Find closest (sphere, distance)
+                let color = if let Some((sphere, distance)) = self
+                    .spheres
+                    .iter()
+                    .filter_map(|sphere| sphere.intersects(&ray).map(|distance| (sphere, distance)))
+                    .min_by(|&(_, distance1), &(_, distance2)| {
+                        distance1
+                            .partial_cmp(&distance2)
+                            .expect("Ordering between distances should exist")
+                    }) {
+                    let hit_point = *ray.direction.inner() * distance;
 
-                for sphere in &self.spheres {
-                    if let Some(hit) = sphere.intersects(&ray) {
-                        if closest_hit.is_none_or(|prev| hit < prev) {
-                            closest_hit = Some(hit);
-                            color = sphere.color;
-                        }
+                    let normal = (hit_point - sphere.center).normalize();
+
+                    let light_direction = (self.light.position - hit_point).normalize();
+                    let light_ray = Ray::new(hit_point, light_direction);
+
+                    // If the ray to the light source intersects any other sphere
+                    if self
+                        .spheres
+                        .iter()
+                        .any(|sphere| sphere.intersects(&light_ray).is_some())
+                    {
+                        Color([0; 3])
+                    } else {
+                        // How straight the light is falling on the surface
+                        let color_coefficient = normal.inner().dot(*light_direction.inner());
+
+                        (self.light.color * sphere.color * color_coefficient).into()
                     }
-                }
+                } else {
+                    Color([0; 3])
+                };
+
                 image.data.push(color);
             }
         }
@@ -207,9 +258,18 @@ impl Screen {
 struct Camera {
     position: Vec3,
 }
-
 impl Camera {
     const fn new(position: Vec3) -> Self {
         Self { position }
+    }
+}
+
+struct Light {
+    position: Vec3,
+    color: Color<f32>,
+}
+impl Light {
+    const fn new(position: Vec3, color: Color<f32>) -> Self {
+        Self { position, color }
     }
 }
