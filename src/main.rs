@@ -1,6 +1,7 @@
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
+mod config;
 mod vec3;
 
 use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
@@ -8,20 +9,7 @@ use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
 use vec3::{NormalizedVec3, Vec3};
 
 fn main() {
-    let screen = Screen::new(
-        Vec3::new(-0.5, 0.5, 10.),
-        Vec3::new(1., 0., 0.),
-        Vec3::new(0., -1., 0.),
-        1000,
-        1000,
-    );
-    let camera = Camera::new(Vec3::new(0., 0., 20.));
-    let spheres = vec![
-        Sphere::new(Vec3::new(0., 0., 0.), 1., Color([1., 0., 0.])),
-        Sphere::new(Vec3::new(0.5, 0., 2.), 0.5, Color([0., 0., 1.])),
-    ];
-    let light = Light::new(Vec3::new(0., 2., 0.), Color([1., 1., 1.]));
-    let scene = Scene::new(screen, camera, spheres, light);
+    let scene = config::parse();
     let image = scene.render();
     image.write_ppm_p6();
 }
@@ -91,6 +79,17 @@ impl From<Color<f32>> for Color<u8> {
 
             (num * 255.) as u8
         }))
+    }
+}
+impl From<&str> for Color<f32> {
+    fn from(value: &str) -> Self {
+        let mut values = value.split(' ').map(|value| value.parse().unwrap());
+
+        Self([
+            values.next().unwrap(),
+            values.next().unwrap(),
+            values.next().unwrap(),
+        ])
     }
 }
 
@@ -165,14 +164,6 @@ struct Scene {
 }
 
 impl Scene {
-    const fn new(screen: Screen, camera: Camera, spheres: Vec<Sphere>, light: Light) -> Self {
-        Self {
-            screen,
-            camera,
-            spheres,
-            light,
-        }
-    }
     // The only precision loss is turning the resolution into floats, which is fine
     #[expect(clippy::cast_precision_loss)]
     fn render(&self) -> Image {

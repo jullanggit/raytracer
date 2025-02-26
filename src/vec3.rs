@@ -7,7 +7,6 @@ pub struct Vec3 {
     pub y: f32,
     pub z: f32,
 }
-
 impl Vec3 {
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
@@ -48,6 +47,19 @@ impl Mul<f32> for Vec3 {
     type Output = Self;
     fn mul(self, rhs: f32) -> Self::Output {
         Self::new(self.x * rhs, self.y * rhs, self.z * rhs)
+    }
+}
+
+#[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
+impl From<&str> for Vec3 {
+    fn from(value: &str) -> Self {
+        let mut values = value.split(' ').map(|value| value.parse().unwrap());
+
+        Self {
+            x: values.next().unwrap(),
+            y: values.next().unwrap(),
+            z: values.next().unwrap(),
+        }
     }
 }
 
