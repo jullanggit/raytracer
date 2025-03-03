@@ -130,7 +130,7 @@ impl Scene {
         ) -> bool {
             iter.into_iter()
                 .filter(|shape| shape.intersects(light_ray).is_some())
-                .nth(1)
+                .nth(1) // allow one intersection with the object itself
                 .is_some()
         }
 
@@ -150,7 +150,7 @@ impl Scene {
             let light_direction = (self.light.position - hit_point).normalize();
             let light_ray = Ray::new(hit_point, light_direction);
 
-            // If the ray to the light source intersects any other sphere
+            // If the ray to the light source is occluded by any other shape
             if is_occluded(&self.spheres, &light_ray) || is_occluded(&self.planes, &light_ray) {
                 None
             } else {
