@@ -69,6 +69,7 @@ impl Shape for Sphere {
     }
 }
 
+#[derive(Debug)]
 pub struct Plane {
     point: Vec3,
     normal: NormalizedVec3,

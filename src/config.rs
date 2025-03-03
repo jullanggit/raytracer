@@ -49,20 +49,22 @@ pub fn parse() -> Scene {
                 spheres = Some(inner_spheres);
             }
             ("planes", value) => {
-                let planes_string = value[1..value.len() - 2].split("), ("); // Skip closing parenthesis
-
                 let mut inner_planes = Vec::new();
 
-                for plane_string in planes_string {
-                    let mut parts = plane_string.split(", ");
+                if 1 < value.len() {
+                    let planes_string = value[1..value.len() - 2].split("), ("); // Skip closing parenthesis
 
-                    inner_planes.push(Plane::new(
-                        parts.next().unwrap().into(),
-                        Vec3::normalize(parts.next().unwrap().into()),
-                        parts.next().unwrap().into(),
-                    ));
+                    for plane_string in planes_string {
+                        let mut parts = plane_string.split(", ");
 
-                    assert!(parts.next().is_none());
+                        inner_planes.push(Plane::new(
+                            parts.next().unwrap().into(),
+                            Vec3::normalize(parts.next().unwrap().into()),
+                            parts.next().unwrap().into(),
+                        ));
+
+                        assert!(parts.next().is_none());
+                    }
                 }
 
                 planes = Some(inner_planes);

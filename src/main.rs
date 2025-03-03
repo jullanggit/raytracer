@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![feature(anonymous_lifetime_in_impl_trait)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
@@ -9,7 +10,7 @@ mod vec3;
 use crate::shapes::{Plane, Sphere};
 use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
 
-use shapes::Shape as _;
+use shapes::Shape;
 use vec3::{NormalizedVec3, Vec3};
 
 fn main() {
@@ -56,7 +57,7 @@ impl Image {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(transparent)]
 /// A rgb color
 /// for Color<f32> values should be between 0 and 1
@@ -118,6 +119,49 @@ struct Scene {
 }
 
 impl Scene {
+    fn outer_fn<'a, S: Shape + 'a>(
+        &self,
+        iter: impl IntoIterator<Item = &'a S>,
+        ray: &Ray,
+    ) -> Option<Color<u8>> {
+        fn is_occluded<'a, S: Shape + 'a>(
+            iter: impl IntoIterator<Item = &'a S>,
+            light_ray: &Ray,
+        ) -> bool {
+            iter.into_iter()
+                .any(|shape| shape.intersects(light_ray).is_some())
+        }
+
+        if let Some((shape, time)) = iter
+            .into_iter()
+            .filter_map(|shape| shape.intersects(ray).map(|time| (shape, time)))
+            .min_by(|&(_, time1), &(_, time2)| {
+                time1
+                    .partial_cmp(&time2)
+                    .expect("Ordering between times should exist")
+            })
+        {
+            let hit_point = ray.origin + *ray.direction.inner() * time;
+
+            let normal = shape.normal(&hit_point);
+
+            let light_direction = (self.light.position - hit_point).normalize();
+            let light_ray = Ray::new(hit_point, light_direction);
+
+            // If the ray to the light source intersects any other sphere
+            if is_occluded(&self.spheres, &light_ray) || is_occluded(&self.planes, &light_ray) {
+                None
+            } else {
+                // How straight the light is falling on the surface
+                let color_coefficient = light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
+
+                Some((self.light.color * shape.color() * color_coefficient).into())
+            }
+        } else {
+            None
+        }
+    }
+
     // The only precision loss is turning the resolution into floats, which is fine
     #[expect(clippy::cast_precision_loss)]
     fn render(&self) -> Image {
@@ -135,41 +179,10 @@ impl Scene {
                     (pixel_position - self.camera.position).normalize(),
                 );
 
-                // Find closest (sphere, distance)
-                let color = if let Some((sphere, distance)) = self
-                    .spheres
-                    .iter()
-                    .filter_map(|sphere| sphere.intersects(&ray).map(|distance| (sphere, distance)))
-                    .min_by(|&(_, distance1), &(_, distance2)| {
-                        distance1
-                            .partial_cmp(&distance2)
-                            .expect("Ordering between distances should exist")
-                    }) {
-                    let hit_point = ray.origin + *ray.direction.inner() * distance;
-
-                    let normal = sphere.normal(&hit_point);
-
-                    let light_direction = (self.light.position - hit_point).normalize();
-                    let light_ray = Ray::new(hit_point, light_direction);
-
-                    // If the ray to the light source intersects any other sphere
-                    if self
-                        .spheres
-                        .iter()
-                        .filter(|&other_sphere| *other_sphere != *sphere)
-                        .any(|sphere| sphere.intersects(&light_ray).is_some())
-                    {
-                        Color([0; 3])
-                    } else {
-                        // How straight the light is falling on the surface
-                        let color_coefficient =
-                            light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
-
-                        (self.light.color * sphere.color() * color_coefficient).into()
-                    }
-                } else {
-                    Color([0; 3])
-                };
+                let color = self
+                    .outer_fn(&self.spheres, &ray)
+                    .or_else(|| self.outer_fn(&self.planes, &ray))
+                    .unwrap_or_default();
 
                 image.data.push(color);
             }
