@@ -129,7 +129,9 @@ impl Scene {
             light_ray: &Ray,
         ) -> bool {
             iter.into_iter()
-                .any(|shape| shape.intersects(light_ray).is_some())
+                .filter(|shape| shape.intersects(light_ray).is_some())
+                .nth(1)
+                .is_some()
         }
 
         if let Some((shape, time)) = iter
