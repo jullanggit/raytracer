@@ -114,11 +114,16 @@ impl Sphere {
 struct Plane {
     point: Vec3,
     normal: NormalizedVec3,
+    color: Color<f32>,
 }
 
 impl Plane {
-    const fn new(point: Vec3, normal: NormalizedVec3) -> Self {
-        Self { point, normal }
+    const fn new(point: Vec3, normal: NormalizedVec3, color: Color<f32>) -> Self {
+        Self {
+            point,
+            normal,
+            color,
+        }
     }
 }
 

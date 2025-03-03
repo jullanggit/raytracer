@@ -59,6 +59,7 @@ pub fn parse() -> Scene {
                     inner_planes.push(Plane::new(
                         parts.next().unwrap().into(),
                         Vec3::normalize(parts.next().unwrap().into()),
+                        parts.next().unwrap().into(),
                     ));
 
                     assert!(parts.next().is_none());
