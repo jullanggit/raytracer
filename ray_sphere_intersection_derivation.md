@@ -1,4 +1,4 @@
-(\vec{C} + \vec{d} \cdot t) \bullet (\vec{C} + \vec{d} \cdot t) = r^2 \\
+$(\vec{C} + \vec{d} \cdot t) \bullet (\vec{C} + \vec{d} \cdot t) = r^2 \\
 \vec{C} \bullet \vec{C} + 2t \cdot \vec{C} \bullet \vec{d} + t^2 \cdot \vec{d} \bullet \vec{d} = r^2\\
 \vec{C} \bullet \vec{C} + 2t \cdot \vec{C} \bullet \vec{d} + t^2 = r^2\\
 t^2 + t \cdot 2 \cdot \vec{C} \bullet \vec{d} + \vec{C} \bullet \vec{C} - r^2 = 0 \\
@@ -9,4 +9,4 @@ t = \frac{-b \pm \sqrt{b^2 -4ac}}{2a} \\
 = \frac{-2 \cdot \vec{C} \bullet \vec{d} \pm \sqrt{4((\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2)}}{2} \\
 = \frac{-2 \cdot \vec{C} \bullet \vec{d} \pm 2\sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2}}{2} \\
 = \frac{2\left(-\vec{C} \bullet \vec{d} \pm \sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2}\right)}{2} \\
-= -\vec{C} \bullet \vec{d} \pm \sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2} \\
+= -\vec{C} \bullet \vec{d} \pm \sqrt{(\vec{C} \bullet \vec{d})^2 -\vec{C} \bullet \vec{C} + r^2} \\$

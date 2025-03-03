@@ -1,3 +1,4 @@
+#![feature(let_chains)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
@@ -81,6 +82,7 @@ impl From<Color<f32>> for Color<u8> {
         }))
     }
 }
+#[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
 impl From<&str> for Color<f32> {
     fn from(value: &str) -> Self {
         let mut values = value.split(' ').map(|value| value.parse().unwrap());
@@ -106,6 +108,17 @@ impl Sphere {
             radius,
             color,
         }
+    }
+}
+
+struct Plane {
+    point: Vec3,
+    normal: NormalizedVec3,
+}
+
+impl Plane {
+    const fn new(point: Vec3, normal: NormalizedVec3) -> Self {
+        Self { point, normal }
     }
 }
 
@@ -155,11 +168,41 @@ impl Intersects for Sphere {
         }
     }
 }
+impl Intersects for Plane {
+    fn intersects(&self, ray: &Ray) -> Option<f32> {
+        let denominator = self.normal.inner().dot(*ray.direction.inner());
+
+        if denominator.abs() < f32::EPSILON {
+            return None; // Ray is parallel to the plane
+        }
+
+        let numerator = self.normal.inner().dot(ray.origin - self.point);
+
+        let t = -(numerator / denominator);
+
+        if t <= 0. {
+            return None; // Intersection at or behind the ray's origin
+        }
+
+        Some(t)
+    }
+}
+
+trait Normal {
+    /// Calculates the normal of a point on the shape's surface
+    fn normal(&self, point: &Vec3) -> NormalizedVec3;
+}
+impl Normal for Sphere {
+    fn normal(&self, point: &Vec3) -> NormalizedVec3 {
+        (*point - self.center).normalize()
+    }
+}
 
 struct Scene {
     screen: Screen,
     camera: Camera,
     spheres: Vec<Sphere>,
+    planes: Vec<Plane>,
     light: Light,
 }
 
@@ -193,7 +236,7 @@ impl Scene {
                     }) {
                     let hit_point = ray.origin + *ray.direction.inner() * distance;
 
-                    let normal = (hit_point - sphere.center).normalize();
+                    let normal = sphere.normal(&hit_point);
 
                     let light_direction = (self.light.position - hit_point).normalize();
                     let light_ray = Ray::new(hit_point, light_direction);

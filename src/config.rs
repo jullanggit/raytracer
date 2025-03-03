@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::{Camera, Light, Scene, Screen, Sphere};
+use crate::{Camera, Light, Plane, Scene, Screen, Sphere, vec3::Vec3};
 
 pub fn parse() -> Scene {
     let string = fs::read_to_string("scene").unwrap();
@@ -10,6 +10,7 @@ pub fn parse() -> Scene {
     let mut screen = None;
     let mut camera = None;
     let mut spheres = None;
+    let mut planes = None;
     let mut light = None;
 
     while screen.is_none() | camera.is_none() | spheres.is_none() | light.is_none() {
@@ -47,6 +48,24 @@ pub fn parse() -> Scene {
 
                 spheres = Some(inner_spheres);
             }
+            ("planes", value) => {
+                let planes_string = value[1..value.len() - 2].split("), ("); // Skip closing parenthesis
+
+                let mut inner_planes = Vec::new();
+
+                for plane_string in planes_string {
+                    let mut parts = plane_string.split(", ");
+
+                    inner_planes.push(Plane::new(
+                        parts.next().unwrap().into(),
+                        Vec3::normalize(parts.next().unwrap().into()),
+                    ));
+
+                    assert!(parts.next().is_none());
+                }
+
+                planes = Some(inner_planes);
+            }
             ("light", value) => {
                 let mut values = value[..value.len() - 1].split(", "); // Skip closing parenthesis
 
@@ -65,6 +84,7 @@ pub fn parse() -> Scene {
         screen: screen.unwrap(),
         camera: camera.unwrap(),
         spheres: spheres.unwrap(),
+        planes: planes.unwrap(),
         light: light.unwrap(),
     }
 }
