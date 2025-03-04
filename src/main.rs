@@ -169,6 +169,7 @@ impl Scene {
                     smallest_shape_intersection(&self.spheres, &ray)
                         .into_iter()
                         .chain(smallest_shape_intersection(&self.planes, &ray))
+                        .chain(smallest_shape_intersection(&self.triangles, &ray))
                         .min_by(|&(a, _, _, _), &(b, _, _, _)| a.partial_cmp(&b).unwrap())
                 {
                     let light_direction = (self.light.position - hit_point).normalize();
@@ -177,6 +178,7 @@ impl Scene {
                     // If the ray to the light source is occluded by any other shape
                     if is_occluded(&self.spheres, &light_ray)
                         || is_occluded(&self.planes, &light_ray)
+                        || is_occluded(&self.triangles, &light_ray)
                     {
                         Color::default()
                     } else {

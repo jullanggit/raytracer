@@ -1,9 +1,11 @@
+use std::fmt::Debug;
+
 use crate::{
     Color, Ray,
     vec3::{NormalizedVec3, Vec3},
 };
 
-pub trait Shape {
+pub trait Shape: Debug {
     /// The time at which the ray intersects the object
     fn intersects(&self, ray: &Ray) -> Option<f32>;
 
@@ -110,6 +112,7 @@ impl Shape for Plane {
     }
 }
 
+#[derive(Debug)]
 pub struct Triangle {
     a: Vec3,
     /// The edge from a to b
@@ -129,12 +132,12 @@ impl Triangle {
     }
 }
 impl Shape for Triangle {
-    // Möller-Trumbore intersection algorithm (copied from wikipedia)
+    // Möller-Trumbore intersection algorithm
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let ray_cross_e2 = ray.direction.inner().cross(self.e2);
         let det = self.e1.dot(ray_cross_e2);
 
-        if det > -f32::EPSILON && det < f32::EPSILON {
+        if det.abs() < f32::EPSILON {
             return None; // Ray is parallel to triangle.
         }
 
