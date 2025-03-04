@@ -49,14 +49,14 @@ impl Shape for Sphere {
         // If t1 is positive (in front of the origin), return it, as
         // t1 is always closer than t2, because we subtract,
         // instead of add the discriminant (which is always positive)
-        if t1 > 0.0 {
+        if t1 > f32::EPSILON {
             Some(t1)
         } else {
             // The second intersection point
             let t2 = -delta_origin_direction + discriminant.sqrt();
 
             // If t2 is positive, return it, else None
-            (t2 > 0.0).then_some(t2)
+            (t2 > f32::EPSILON).then_some(t2)
         }
     }
 
@@ -97,11 +97,8 @@ impl Shape for Plane {
 
         let t = -(numerator / denominator);
 
-        if t <= 0. {
-            return None; // Intersection at or behind the ray's origin
-        }
-
-        Some(t)
+        // Ensure intersection is in front of ray origin
+        (t > f32::EPSILON).then_some(t)
     }
 
     fn normal(&self, _point: &Vec3) -> NormalizedVec3 {
@@ -119,13 +116,49 @@ pub struct Triangle {
     e1: Vec3,
     /// The edge from a to c
     e2: Vec3,
+    color: Color<f32>,
 }
 impl Triangle {
-    pub fn new(a: Vec3, b: Vec3, c: Vec3) -> Self {
+    pub fn new(a: Vec3, b: Vec3, c: Vec3, color: Color<f32>) -> Self {
         Self {
             a,
             e1: b - a,
             e2: c - a,
+            color,
         }
+    }
+}
+impl Shape for Triangle {
+    // Möller-Trumbore intersection algorithm (copied from wikipedia)
+    fn intersects(&self, ray: &Ray) -> Option<f32> {
+        let ray_cross_e2 = ray.direction.inner().cross(self.e2);
+        let det = self.e1.dot(ray_cross_e2);
+
+        if det > -f32::EPSILON && det < f32::EPSILON {
+            return None; // Ray is parallel to triangle.
+        }
+
+        let inv_det = 1.0 / det;
+        let s = ray.origin - self.a;
+        let u = inv_det * s.dot(ray_cross_e2);
+        if !(0.0..=1.).contains(&u) {
+            return None;
+        }
+
+        let s_cross_e1 = s.cross(self.e1);
+        let v = inv_det * ray.direction.inner().dot(s_cross_e1);
+        if v < 0.0 || u + v > 1.0 {
+            return None;
+        }
+        let t = inv_det * self.e2.dot(s_cross_e1);
+
+        // Ensure intersection is in front of ray origin
+        (t > f32::EPSILON).then_some(t)
+    }
+    fn normal(&self, _: &Vec3) -> NormalizedVec3 {
+        (self.e1.cross(self.e2)).normalize()
+    }
+    fn color(&self) -> Color<f32> {
+        self.color
     }
 }

@@ -14,6 +14,13 @@ impl Vec3 {
     pub fn dot(self, rhs: Self) -> f32 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
     }
+    pub fn cross(self, rhs: Self) -> Self {
+        Self {
+            x: self.y * rhs.z - rhs.y - self.z,
+            y: self.z * rhs.x - rhs.z - self.x,
+            z: self.x * rhs.y - rhs.x - self.y,
+        }
+    }
     pub fn length(&self) -> f32 {
         self.dot(*self).sqrt()
     }
