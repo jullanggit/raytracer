@@ -10,7 +10,7 @@ mod vec3;
 use crate::shapes::{Plane, Sphere};
 use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
 
-use shapes::Shape;
+use shapes::{Shape, Triangle};
 use vec3::{NormalizedVec3, Vec3};
 
 fn main() {
@@ -115,6 +115,7 @@ struct Scene {
     camera: Camera,
     spheres: Vec<Sphere>,
     planes: Vec<Plane>,
+    triangles: Vec<Triangle>,
     light: Light,
 }
 

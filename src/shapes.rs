@@ -112,3 +112,20 @@ impl Shape for Plane {
         self.color
     }
 }
+
+pub struct Triangle {
+    a: Vec3,
+    /// The edge from a to b
+    e1: Vec3,
+    /// The edge from a to c
+    e2: Vec3,
+}
+impl Triangle {
+    pub fn new(a: Vec3, b: Vec3, c: Vec3) -> Self {
+        Self {
+            a,
+            e1: b - a,
+            e2: c - a,
+        }
+    }
+}

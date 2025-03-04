@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::{Camera, Light, Plane, Scene, Screen, Sphere, vec3::Vec3};
+use crate::{Camera, Light, Plane, Scene, Screen, Sphere, shapes::Triangle, vec3::Vec3};
 
 pub fn parse() -> Scene {
     let string = fs::read_to_string("scene").unwrap();
@@ -11,6 +11,7 @@ pub fn parse() -> Scene {
     let mut camera = None;
     let mut spheres = None;
     let mut planes = None;
+    let mut triangles = None;
     let mut light = None;
 
     while screen.is_none() | camera.is_none() | spheres.is_none() | light.is_none() {
@@ -69,6 +70,27 @@ pub fn parse() -> Scene {
 
                 planes = Some(inner_planes);
             }
+            ("triangles", value) => {
+                let mut inner_triangles = Vec::new();
+
+                if 1 < value.len() {
+                    let triangles_string = value[1..value.len() - 2].split("), ("); // Skip closing parenthesis
+
+                    for triangle_string in triangles_string {
+                        let mut parts = triangle_string.split(", ");
+
+                        inner_triangles.push(Triangle::new(
+                            parts.next().unwrap().into(),
+                            parts.next().unwrap().into(),
+                            parts.next().unwrap().into(),
+                        ));
+
+                        assert!(parts.next().is_none());
+                    }
+                }
+
+                triangles = Some(inner_triangles);
+            }
             ("light", value) => {
                 let mut values = value[..value.len() - 1].split(", "); // Skip closing parenthesis
 
@@ -88,6 +110,7 @@ pub fn parse() -> Scene {
         camera: camera.unwrap(),
         spheres: spheres.unwrap(),
         planes: planes.unwrap(),
+        triangles: triangles.unwrap(),
         light: light.unwrap(),
     }
 }
