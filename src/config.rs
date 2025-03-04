@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, str::Split};
 
 use crate::{Camera, Light, Plane, Scene, Screen, Sphere, shapes::Triangle, vec3::Vec3};
 
@@ -17,89 +17,48 @@ pub fn parse() -> Scene {
     while screen.is_none() | camera.is_none() | spheres.is_none() | light.is_none() {
         match iter.next().unwrap().split_once('(').unwrap() {
             ("screen", value) => {
-                let mut values = value[..value.len() - 1].split(", "); // Skip closing parenthesis
-
-                screen = Some(Screen::new(
-                    values.next().unwrap().into(),
-                    values.next().unwrap().into(),
-                    values.next().unwrap().into(),
-                    values.next().unwrap().parse().unwrap(),
-                    values.next().unwrap().parse().unwrap(),
-                ));
-
-                assert!(values.next().is_none());
+                screen = Some(single_item_parse(value, |values| {
+                    Screen::new(
+                        values.next().unwrap().into(),
+                        values.next().unwrap().into(),
+                        values.next().unwrap().into(),
+                        values.next().unwrap().parse().unwrap(),
+                        values.next().unwrap().parse().unwrap(),
+                    )
+                }));
             }
             ("camera", value) => camera = Some(Camera::new(value[..value.len() - 1].into())),
             ("spheres", value) => {
-                let spheres_string = value[1..value.len() - 2].split("), ("); // Skip closing parenthesis
-
-                let mut inner_spheres = Vec::new();
-
-                for sphere_string in spheres_string {
-                    let mut parts = sphere_string.split(", ");
-
-                    inner_spheres.push(Sphere::new(
-                        parts.next().unwrap().into(),
-                        parts.next().unwrap().parse().unwrap(),
-                        parts.next().unwrap().into(),
-                    ));
-
-                    assert!(parts.next().is_none());
-                }
-
-                spheres = Some(inner_spheres);
+                spheres = Some(multi_item_parse(value, &|values| {
+                    Sphere::new(
+                        values.next().unwrap().into(),
+                        values.next().unwrap().parse().unwrap(),
+                        values.next().unwrap().into(),
+                    )
+                }));
             }
             ("planes", value) => {
-                let mut inner_planes = Vec::new();
-
-                if 1 < value.len() {
-                    let planes_string = value[1..value.len() - 2].split("), ("); // Skip closing parenthesis
-
-                    for plane_string in planes_string {
-                        let mut parts = plane_string.split(", ");
-
-                        inner_planes.push(Plane::new(
-                            parts.next().unwrap().into(),
-                            Vec3::normalize(parts.next().unwrap().into()),
-                            parts.next().unwrap().into(),
-                        ));
-
-                        assert!(parts.next().is_none());
-                    }
-                }
-
-                planes = Some(inner_planes);
+                planes = Some(multi_item_parse(value, &|values| {
+                    Plane::new(
+                        values.next().unwrap().into(),
+                        Vec3::normalize(values.next().unwrap().into()),
+                        values.next().unwrap().into(),
+                    )
+                }));
             }
             ("triangles", value) => {
-                let mut inner_triangles = Vec::new();
-
-                if 1 < value.len() {
-                    let triangles_string = value[1..value.len() - 2].split("), ("); // Skip closing parenthesis
-
-                    for triangle_string in triangles_string {
-                        let mut parts = triangle_string.split(", ");
-
-                        inner_triangles.push(Triangle::new(
-                            parts.next().unwrap().into(),
-                            parts.next().unwrap().into(),
-                            parts.next().unwrap().into(),
-                        ));
-
-                        assert!(parts.next().is_none());
-                    }
-                }
-
-                triangles = Some(inner_triangles);
+                triangles = Some(multi_item_parse(value, &|values| {
+                    Triangle::new(
+                        values.next().unwrap().into(),
+                        values.next().unwrap().into(),
+                        values.next().unwrap().into(),
+                    )
+                }));
             }
             ("light", value) => {
-                let mut values = value[..value.len() - 1].split(", "); // Skip closing parenthesis
-
-                light = Some(Light::new(
-                    values.next().unwrap().into(),
-                    values.next().unwrap().into(),
-                ));
-
-                assert!(values.next().is_none());
+                light = Some(single_item_parse(value, |values| {
+                    Light::new(values.next().unwrap().into(), values.next().unwrap().into())
+                }));
             }
             (other, value) => panic!("Unknown entry {other} with value {value}"),
         }
@@ -113,4 +72,28 @@ pub fn parse() -> Scene {
         triangles: triangles.unwrap(),
         light: light.unwrap(),
     }
+}
+
+fn single_item_parse<T>(value: &str, f: impl Fn(&mut Split<&str>) -> T) -> T {
+    let mut values = value[..value.len() - 1].split(", "); // Skip closing parenthesis with len - 1
+
+    let parsed = f(&mut values);
+
+    assert!(values.next().is_none());
+
+    parsed
+}
+
+fn multi_item_parse<T>(str: &str, f: &impl Fn(&mut Split<&str>) -> T) -> Vec<T> {
+    let mut parsed = Vec::new();
+
+    if str.len() > 1 {
+        let values = str[1..str.len() - 1].split("), ("); // Skip opening and closing parentheses with 1..len - 1
+
+        for value in values {
+            parsed.push(single_item_parse(value, f));
+        }
+    }
+
+    parsed
 }

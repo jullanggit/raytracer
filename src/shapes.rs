@@ -14,7 +14,7 @@ pub trait Shape {
     fn color(&self) -> Color<f32>;
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Sphere {
     center: Vec3,
     radius: f32,
