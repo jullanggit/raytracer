@@ -1,6 +1,6 @@
 use std::{fs, str::Split};
 
-use crate::{Camera, Light, Plane, Scene, Screen, Sphere, shapes::Triangle, vec3::Vec3};
+use crate::{Camera, Light, Plane, Scene, Screen, Sphere, obj, shapes::Triangle, vec3::Vec3};
 
 pub fn parse() -> Scene {
     let string = fs::read_to_string("scene").unwrap();
@@ -47,7 +47,9 @@ pub fn parse() -> Scene {
                 }));
             }
             ("triangles", value) => {
-                triangles = Some(multi_item_parse(value, &|values| {
+                let triangles = triangles.get_or_insert_with(Vec::new);
+
+                triangles.append(&mut multi_item_parse(value, &|values| {
                     Triangle::new(
                         values.next().unwrap().into(),
                         values.next().unwrap().into(),
@@ -60,6 +62,15 @@ pub fn parse() -> Scene {
                 light = Some(single_item_parse(value, |values| {
                     Light::new(values.next().unwrap().into(), values.next().unwrap().into())
                 }));
+            }
+            ("obj", value) => {
+                let triangles = triangles.get_or_insert_with(Vec::new);
+
+                multi_item_parse(value, &|value| {
+                    obj::parse(&format!("obj/{}.obj", value.next().unwrap()))
+                })
+                .into_iter()
+                .for_each(|mut vec| triangles.append(&mut vec));
             }
             (other, value) => panic!("Unknown entry {other} with value {value}"),
         }

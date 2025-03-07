@@ -4,6 +4,7 @@
 #![allow(clippy::suboptimal_flops)]
 
 mod config;
+mod obj;
 mod shapes;
 mod vec3;
 
