@@ -156,44 +156,59 @@ impl Scene {
         let column_step = self.screen.left_edge / (self.screen.resolution_height - 1) as f32;
 
         let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
+
+        // For every (x,y) pixel
         for y in 0..self.screen.resolution_height {
             for x in 0..self.screen.resolution_width {
-                let pixel_position =
-                    self.screen.top_left + row_step * x as f32 + column_step * y as f32;
+                // Multiple samples
+                let color = Color(
+                    std::iter::repeat_with(|| {
+                        let pixel_position = self.screen.top_left
+                        + row_step * (x as f32 + prng(x) - 0.5) // Add random variation
+                        + column_step * (y as f32 + prng(y) - 0.5);
 
-                let ray = Ray::new(
-                    self.camera.position,
-                    (pixel_position - self.camera.position).normalize(),
+                        let ray = Ray::new(
+                            self.camera.position,
+                            (pixel_position - self.camera.position).normalize(),
+                        );
+
+                        if let Some((_, hit_point, normal, color)) =
+                            smallest_shape_intersection(&self.spheres, &ray)
+                                .into_iter()
+                                .chain(smallest_shape_intersection(&self.planes, &ray))
+                                .chain(smallest_shape_intersection(&self.triangles, &ray))
+                                .min_by(|&(a, _, _, _), &(b, _, _, _)| a.partial_cmp(&b).unwrap())
+                        {
+                            let light_direction = (self.light.position - hit_point).normalize();
+                            let light_ray = Ray::new(hit_point, light_direction);
+
+                            // If the ray to the light source is occluded by any other shape
+                            if is_occluded(&self.spheres, &light_ray)
+                                || is_occluded(&self.planes, &light_ray)
+                                || is_occluded(&self.triangles, &light_ray)
+                            {
+                                Color::default()
+                            } else {
+                                // How straight the light is falling on the surface
+                                let color_coefficient =
+                                    light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
+
+                                self.light.color * color * color_coefficient
+                            }
+                        } else {
+                            Color::default()
+                        }
+                    })
+                    .take(self.screen.samples_per_pixel)
+                    .reduce(|acc, element| {
+                        Color(array::from_fn(|index| acc.0[index] + element.0[index]))
+                    })
+                    .unwrap_or_default()
+                    .0
+                    .map(|e| e / self.screen.samples_per_pixel as f32),
                 );
 
-                let color = if let Some((_, hit_point, normal, color)) =
-                    smallest_shape_intersection(&self.spheres, &ray)
-                        .into_iter()
-                        .chain(smallest_shape_intersection(&self.planes, &ray))
-                        .chain(smallest_shape_intersection(&self.triangles, &ray))
-                        .min_by(|&(a, _, _, _), &(b, _, _, _)| a.partial_cmp(&b).unwrap())
-                {
-                    let light_direction = (self.light.position - hit_point).normalize();
-                    let light_ray = Ray::new(hit_point, light_direction);
-
-                    // If the ray to the light source is occluded by any other shape
-                    if is_occluded(&self.spheres, &light_ray)
-                        || is_occluded(&self.planes, &light_ray)
-                        || is_occluded(&self.triangles, &light_ray)
-                    {
-                        Color::default()
-                    } else {
-                        // How straight the light is falling on the surface
-                        let color_coefficient =
-                            light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
-
-                        (self.light.color * color * color_coefficient).into()
-                    }
-                } else {
-                    Color::default()
-                };
-
-                image.data.push(color);
+                image.data.push(color.into());
             }
         }
         image
@@ -206,6 +221,7 @@ struct Screen {
     left_edge: Vec3,
     resolution_width: usize,
     resolution_height: usize,
+    samples_per_pixel: usize,
 }
 impl Screen {
     const fn new(
@@ -214,6 +230,7 @@ impl Screen {
         left_edge: Vec3,
         resolution_width: usize,
         resolution_height: usize,
+        samples_per_pixel: usize,
     ) -> Self {
         Self {
             top_left,
@@ -221,6 +238,7 @@ impl Screen {
             left_edge,
             resolution_width,
             resolution_height,
+            samples_per_pixel,
         }
     }
 }
@@ -242,4 +260,12 @@ impl Light {
     const fn new(position: Vec3, color: Color<f32>) -> Self {
         Self { position, color }
     }
+}
+
+const fn prng(mut state: usize) -> f32 {
+    state ^= state >> 12;
+    state ^= state << 25;
+    state ^= state >> 27;
+
+    state as f32
 }

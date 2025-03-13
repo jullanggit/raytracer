@@ -24,6 +24,7 @@ pub fn parse() -> Scene {
                         values.next().unwrap().into(),
                         values.next().unwrap().parse().unwrap(),
                         values.next().unwrap().parse().unwrap(),
+                        values.next().unwrap().parse().unwrap(),
                     )
                 }));
             }
