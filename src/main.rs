@@ -263,9 +263,9 @@ impl Light {
 }
 
 const fn prng(mut state: usize) -> f32 {
-    state ^= state >> 12;
-    state ^= state << 25;
-    state ^= state >> 27;
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
 
-    state as f32
+    (state >> 9) as f32 * (1.0 / (1_u32 << 23) as f32)
 }
