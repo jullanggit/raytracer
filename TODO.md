@@ -1,0 +1,5 @@
+- vertex normals
+- loading colors from textures
+- bounces
+- materials
+- bvh
