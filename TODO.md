@@ -1,4 +1,4 @@
-- vertex normals
+- support .obj files without vertex normals
 - loading colors from textures
 - bounces
 - materials
