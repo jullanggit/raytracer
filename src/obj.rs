@@ -9,12 +9,12 @@ pub fn parse(path: &str) -> Vec<Triangle> {
     let vertices = lines
         .clone()
         .filter(|line| line.starts_with("v "))
-        .map(|line| line[1..].trim().into());
+        .map(|line| line[2..].trim().into());
 
     let normals = lines
         .clone()
         .filter(|line| line.starts_with("vn"))
-        .map(|line| line[1..].trim().into());
+        .map(|line| line[2..].trim().into());
 
     let combined: Vec<(Vec3, Vec3)> = vertices.zip(normals).collect();
 

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{array, fmt::Debug};
 
 use crate::{
     Color, Ray,
@@ -144,6 +144,25 @@ impl Triangle {
             color,
         }
     }
+    #[expect(clippy::suspicious_operation_groupings)] // clippy doesn't like d01 * d01
+    fn barycentric_coordinates(&self, point: &Vec3) -> [f32; 3] {
+        let ap = *point - self.a; // a -> p
+
+        // Dot products
+        let d00 = self.e1.dot(self.e1);
+        let d01 = self.e1.dot(self.e2);
+        let d11 = self.e2.dot(self.e2);
+        let d20 = ap.dot(self.e1);
+        let d21 = ap.dot(self.e2);
+
+        // Barycentric coordinates
+        let denominator = d00 * d11 - d01 * d01;
+        let v = (d11 * d20 - d01 * d21) / denominator;
+        let w = (d00 * d21 - d01 * d20) / denominator;
+        let u = 1. - v - w;
+
+        [u, v, w]
+    }
 }
 impl Shape for Triangle {
     // Möller-Trumbore intersection algorithm
@@ -175,8 +194,13 @@ impl Shape for Triangle {
         // Ensure intersection is in front of ray origin
         (t > TOLERANCE).then_some(t)
     }
-    fn normal(&self, _: &Vec3) -> NormalizedVec3 {
-        (self.e1.cross(self.e2)).normalize()
+    fn normal(&self, point: &Vec3) -> NormalizedVec3 {
+        let barycentric_coordinates = self.barycentric_coordinates(point);
+
+        let weighted_normals: [_; 3] =
+            array::from_fn(|index| *self.normals[index].inner() * barycentric_coordinates[index]);
+
+        (weighted_normals[0] + weighted_normals[1] + weighted_normals[2]).normalize()
     }
     fn color(&self) -> Color<f32> {
         self.color
