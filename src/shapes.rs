@@ -134,10 +134,13 @@ impl Triangle {
 impl Shape for Triangle {
     // Möller-Trumbore intersection algorithm
     fn intersects(&self, ray: &Ray) -> Option<f32> {
+        // Using f32::EPSILON causes some slight edge misalignments (coming from the naive triangulation) to become visible
+        const TOLERANCE: f32 = 2e-6;
+
         let ray_cross_e2 = ray.direction.inner().cross(self.e2);
         let det = self.e1.dot(ray_cross_e2);
 
-        if det.abs() < f32::EPSILON {
+        if det.abs() < TOLERANCE {
             return None; // Ray is parallel to triangle.
         }
 
@@ -156,7 +159,7 @@ impl Shape for Triangle {
         let t = inv_det * self.e2.dot(s_cross_e1);
 
         // Ensure intersection is in front of ray origin
-        (t > f32::EPSILON).then_some(t)
+        (t > TOLERANCE).then_some(t)
     }
     fn normal(&self, _: &Vec3) -> NormalizedVec3 {
         (self.e1.cross(self.e2)).normalize()

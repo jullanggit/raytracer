@@ -1,4 +1,3 @@
-- .obj polygons
 - vertex normals
 - loading colors from textures
 - bounces

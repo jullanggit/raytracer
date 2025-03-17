@@ -1,5 +1,6 @@
 #![feature(let_chains)]
 #![feature(anonymous_lifetime_in_impl_trait)]
+#![feature(iter_map_windows)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
