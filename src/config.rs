@@ -51,7 +51,7 @@ pub fn parse() -> Scene {
                 let triangles = triangles.get_or_insert_with(Vec::new);
 
                 triangles.append(&mut multi_item_parse(value, &|values| {
-                    Triangle::new(
+                    Triangle::default_normal(
                         values.next().unwrap().into(),
                         values.next().unwrap().into(),
                         values.next().unwrap().into(),

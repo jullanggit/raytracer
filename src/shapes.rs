@@ -119,14 +119,28 @@ pub struct Triangle {
     e1: Vec3,
     /// The edge from a to c
     e2: Vec3,
+    normals: [NormalizedVec3; 3],
     color: Color<f32>,
 }
 impl Triangle {
-    pub fn new(a: Vec3, b: Vec3, c: Vec3, color: Color<f32>) -> Self {
+    pub fn new(a: Vec3, b: Vec3, c: Vec3, normals: [NormalizedVec3; 3], color: Color<f32>) -> Self {
         Self {
             a,
             e1: b - a,
             e2: c - a,
+            normals,
+            color,
+        }
+    }
+    pub fn default_normal(a: Vec3, b: Vec3, c: Vec3, color: Color<f32>) -> Self {
+        let e1 = b - a;
+        let e2 = c - a;
+
+        Self {
+            a,
+            e1,
+            e2,
+            normals: [e1.cross(e2).normalize(); 3],
             color,
         }
     }
