@@ -1,5 +1,6 @@
-- support .obj files without vertex normals
+- support multi-object .obj files
 - loading colors from textures
 - bounces
 - materials
 - bvh
+- support .obj files without vertex normals
