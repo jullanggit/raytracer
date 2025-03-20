@@ -1,4 +1,4 @@
-use std::{array, fmt::Debug};
+use std::{array, f32, fmt::Debug};
 
 use crate::{
     Color, Ray,

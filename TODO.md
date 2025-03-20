@@ -1,5 +1,5 @@
-- support multi-object .obj files
 - loading colors from textures
+- support multi-object .obj files
 - bounces
 - materials
 - bvh
