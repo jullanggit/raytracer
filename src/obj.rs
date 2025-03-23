@@ -1,8 +1,8 @@
 use std::fs;
 
-use crate::{Color, shapes::Triangle, vec3::Vec3};
+use crate::{Color, material::Material, shapes::Triangle, vec3::Vec3};
 
-pub fn parse(path: &str) -> Vec<Triangle> {
+pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
     let string = fs::read_to_string(path).unwrap();
     let lines = string.lines();
 
@@ -17,6 +17,9 @@ pub fn parse(path: &str) -> Vec<Triangle> {
         .filter(|line| line.starts_with("vn"))
         .map(|line| line[2..].trim().into())
         .collect();
+
+    materials.push(Material::new(Color([0.5; 3])));
+    let index = (materials.len() - 1).try_into().unwrap();
 
     lines
         .filter(|line| line.starts_with('f'))
@@ -43,7 +46,7 @@ pub fn parse(path: &str) -> Vec<Triangle> {
                         vertices[0].1.normalize(),
                         vertices[1].1.normalize(),
                     ],
-                    Color([0.5; 3]),
+                    index,
                 )
             })
         })

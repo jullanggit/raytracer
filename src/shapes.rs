@@ -1,7 +1,7 @@
 use std::{array, f32, fmt::Debug};
 
 use crate::{
-    Color, Ray,
+    Ray,
     vec3::{NormalizedVec3, Vec3},
 };
 
@@ -12,22 +12,22 @@ pub trait Shape: Debug {
     /// Calculates the normal of a point on the shape's surface
     fn normal(&self, point: &Vec3) -> NormalizedVec3;
 
-    /// The color of the shape
-    fn color(&self) -> Color<f32>;
+    /// The material index of the shape
+    fn material_index(&self) -> u16;
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Sphere {
     center: Vec3,
     radius: f32,
-    color: Color<f32>,
+    material_index: u16,
 }
 impl Sphere {
-    pub const fn new(center: Vec3, radius: f32, color: Color<f32>) -> Self {
+    pub const fn new(center: Vec3, radius: f32, material_index: u16) -> Self {
         Self {
             center,
             radius,
-            color,
+            material_index,
         }
     }
 }
@@ -66,8 +66,8 @@ impl Shape for Sphere {
         (*point - self.center).normalize()
     }
 
-    fn color(&self) -> Color<f32> {
-        self.color
+    fn material_index(&self) -> u16 {
+        self.material_index
     }
 }
 
@@ -75,18 +75,19 @@ impl Shape for Sphere {
 pub struct Plane {
     point: Vec3,
     normal: NormalizedVec3,
-    color: Color<f32>,
+    material_index: u16,
 }
 
 impl Plane {
-    pub const fn new(point: Vec3, normal: NormalizedVec3, color: Color<f32>) -> Self {
+    pub const fn new(point: Vec3, normal: NormalizedVec3, material_index: u16) -> Self {
         Self {
             point,
             normal,
-            color,
+            material_index,
         }
     }
 }
+
 impl Shape for Plane {
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let denominator = self.normal.inner().dot(*ray.direction.inner());
@@ -107,8 +108,8 @@ impl Shape for Plane {
         self.normal // The normal of a plane is the same at all points on it
     }
 
-    fn color(&self) -> Color<f32> {
-        self.color
+    fn material_index(&self) -> u16 {
+        self.material_index
     }
 }
 
@@ -120,30 +121,30 @@ pub struct Triangle {
     /// The edge from a to c
     e2: Vec3,
     normals: [NormalizedVec3; 3],
-    color: Color<f32>,
+    material_index: u16,
 }
 impl Triangle {
-    pub fn new(a: Vec3, b: Vec3, c: Vec3, normals: [NormalizedVec3; 3], color: Color<f32>) -> Self {
+    pub fn new(
+        a: Vec3,
+        b: Vec3,
+        c: Vec3,
+        normals: [NormalizedVec3; 3],
+        material_index: u16,
+    ) -> Self {
         Self {
             a,
             e1: b - a,
             e2: c - a,
             normals,
-            color,
+            material_index,
         }
     }
     /// Create a Triangle with Vertex normals set to the normal of the overall Triangle
-    pub fn default_normal(a: Vec3, b: Vec3, c: Vec3, color: Color<f32>) -> Self {
+    pub fn default_normal(a: Vec3, b: Vec3, c: Vec3, material_index: u16) -> Self {
         let e1 = b - a;
         let e2 = c - a;
 
-        Self {
-            a,
-            e1,
-            e2,
-            normals: [e1.cross(e2).normalize(); 3],
-            color,
-        }
+        Self::new(a, b, c, [e1.cross(e2).normalize(); 3], material_index)
     }
     #[expect(clippy::suspicious_operation_groupings)] // clippy doesn't like d01 * d01
     fn barycentric_coordinates(&self, point: &Vec3) -> [f32; 3] {
@@ -203,7 +204,7 @@ impl Shape for Triangle {
 
         (weighted_normals[0] + weighted_normals[1] + weighted_normals[2]).normalize()
     }
-    fn color(&self) -> Color<f32> {
-        self.color
+    fn material_index(&self) -> u16 {
+        self.material_index
     }
 }
