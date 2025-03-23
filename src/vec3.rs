@@ -1,5 +1,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
+use crate::rng;
+
 /// A right-handed cartesian coordinate
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec3 {
@@ -76,5 +78,8 @@ pub struct NormalizedVec3(Vec3);
 impl NormalizedVec3 {
     pub const fn inner(&self) -> &Vec3 {
         &self.0
+    }
+    pub fn random() -> Self {
+        Vec3::new(rng::f32(), rng::f32(), rng::f32()).normalize()
     }
 }

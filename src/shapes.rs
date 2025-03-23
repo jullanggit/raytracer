@@ -132,6 +132,7 @@ impl Triangle {
             color,
         }
     }
+    /// Create a Triangle with Vertex normals set to the normal of the overall Triangle
     pub fn default_normal(a: Vec3, b: Vec3, c: Vec3, color: Color<f32>) -> Self {
         let e1 = b - a;
         let e2 = c - a;
