@@ -1,4 +1,4 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::rng;
 
@@ -59,6 +59,13 @@ impl Mul<f32> for Vec3 {
     }
 }
 
+impl Neg for Vec3 {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Self::new(-self.x, -self.y, -self.z)
+    }
+}
+
 #[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
 impl From<&str> for Vec3 {
     fn from(value: &str) -> Self {
@@ -72,6 +79,7 @@ impl From<&str> for Vec3 {
     }
 }
 
+// TODO: add some more methods, so that you don't have to do .inner() all the time
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 pub struct NormalizedVec3(Vec3);
@@ -81,5 +89,12 @@ impl NormalizedVec3 {
     }
     pub fn random() -> Self {
         Vec3::new(rng::f32(), rng::f32(), rng::f32()).normalize()
+    }
+}
+
+impl Neg for NormalizedVec3 {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Self(-*self.inner())
     }
 }

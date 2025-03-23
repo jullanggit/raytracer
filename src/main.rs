@@ -13,7 +13,14 @@ mod shapes;
 mod vec3;
 
 use crate::shapes::{Plane, Sphere};
-use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
+use std::{
+    array,
+    fs::File,
+    io::Write as _,
+    mem::size_of,
+    ops::{Mul, Not as _},
+    slice,
+};
 
 use shapes::{Shape, Triangle};
 use vec3::{NormalizedVec3, Vec3};
@@ -66,6 +73,7 @@ impl Image {
 #[repr(transparent)]
 /// A rgb color
 /// for Color<f32> values should be between 0 and 1
+// TODO: use Vec3 internally
 struct Color<T>([T; 3]);
 
 impl Mul for Color<f32> {
@@ -128,8 +136,47 @@ impl Scene {
     // The only precision loss is turning the resolution into floats, which is fine
     #[expect(clippy::cast_precision_loss)]
     fn render(&self) -> Image {
+        let row_step = self.screen.top_edge / (self.screen.resolution_width - 1) as f32;
+        let column_step = self.screen.left_edge / (self.screen.resolution_height - 1) as f32;
+
+        let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
+
+        // For every (x,y) pixel
+        for y in 0..self.screen.resolution_height {
+            for x in 0..self.screen.resolution_width {
+                // Multiple samples
+                let color = Color(
+                    std::iter::repeat_with(|| {
+                        let pixel_position = self.screen.top_left
+                            + row_step * (x as f32 + rng::f32() / 2.) // Add random variation
+                            + column_step * (y as f32 + rng::f32() / 2.);
+
+                        let ray = Ray::new(
+                            self.camera.position,
+                            (pixel_position - self.camera.position).normalize(),
+                        );
+
+                        self.ray_color(&ray, 5) // TODO: dont hardcode max_depth
+                    })
+                    .take(self.screen.samples_per_pixel)
+                    .map(Option::unwrap_or_default)
+                    .reduce(|acc, element| {
+                        Color(array::from_fn(|index| acc.0[index] + element.0[index]))
+                    })
+                    .unwrap_or_default()
+                    .0
+                    .map(|e| e / self.screen.samples_per_pixel as f32),
+                );
+
+                image.data.push(color.into());
+            }
+        }
+        image
+    }
+    fn ray_color(&self, ray: &Ray, remaining_depth: usize) -> Option<Color<f32>> {
         // Helper functions for iterating over the different shapes
-        fn smallest_shape_intersection<'a, S: Shape + 'a>(
+        /// Returns the nearest intersection, if any, for the given shape iterator
+        fn nearest_shape_intersection<'a, S: Shape + 'a>(
             iter: impl IntoIterator<Item = &'a S>,
             ray: &Ray,
         ) -> Option<(f32, Vec3, NormalizedVec3, Color<f32>)> {
@@ -156,66 +203,48 @@ impl Scene {
                 .is_some()
         }
 
-        let row_step = self.screen.top_edge / (self.screen.resolution_width - 1) as f32;
-        let column_step = self.screen.left_edge / (self.screen.resolution_height - 1) as f32;
+        let nearest_intersection = nearest_shape_intersection(&self.spheres, ray)
+            .into_iter()
+            .chain(nearest_shape_intersection(&self.planes, ray))
+            .chain(nearest_shape_intersection(&self.triangles, ray))
+            .min_by(|&(a, _, _, _), &(b, _, _, _)| a.partial_cmp(&b).unwrap());
 
-        let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
+        nearest_intersection
+            .map(|(_, hit_point, normal, color)| {
+                if remaining_depth == 0 {
+                    let light_direction = (self.light.position - hit_point).normalize();
+                    let light_ray = Ray::new(hit_point, light_direction);
 
-        // For every (x,y) pixel
-        for y in 0..self.screen.resolution_height {
-            for x in 0..self.screen.resolution_width {
-                // Multiple samples
-                let color = Color(
-                    std::iter::repeat_with(|| {
-                        let pixel_position = self.screen.top_left
-                            + row_step * (x as f32 + rng::f32() / 2.) // Add random variation
-                            + column_step * (y as f32 + rng::f32() / 2.);
+                    // If the ray to the light source is not occluded by any other shape
+                    (is_occluded(&self.spheres, &light_ray)
+                        || is_occluded(&self.planes, &light_ray)
+                        || is_occluded(&self.triangles, &light_ray))
+                    .not()
+                    .then(|| {
+                        // How straight the light is falling on the surface
+                        let color_coefficient =
+                            light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
 
-                        let ray = Ray::new(
-                            self.camera.position,
-                            (pixel_position - self.camera.position).normalize(),
-                        );
-
-                        if let Some((_, hit_point, normal, color)) =
-                            smallest_shape_intersection(&self.spheres, &ray)
-                                .into_iter()
-                                .chain(smallest_shape_intersection(&self.planes, &ray))
-                                .chain(smallest_shape_intersection(&self.triangles, &ray))
-                                .min_by(|&(a, _, _, _), &(b, _, _, _)| a.partial_cmp(&b).unwrap())
-                        {
-                            let light_direction = (self.light.position - hit_point).normalize();
-                            let light_ray = Ray::new(hit_point, light_direction);
-
-                            // If the ray to the light source is occluded by any other shape
-                            if is_occluded(&self.spheres, &light_ray)
-                                || is_occluded(&self.planes, &light_ray)
-                                || is_occluded(&self.triangles, &light_ray)
-                            {
-                                Color::default()
-                            } else {
-                                // How straight the light is falling on the surface
-                                let color_coefficient =
-                                    light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
-
-                                self.light.color * color * color_coefficient
-                            }
+                        self.light.color * color * color_coefficient
+                    })
+                } else {
+                    let direction = {
+                        let candidate = NormalizedVec3::random();
+                        if candidate.inner().dot(*normal.inner()).is_sign_positive() {
+                            candidate
                         } else {
-                            Color::default()
+                            -candidate
                         }
-                    })
-                    .take(self.screen.samples_per_pixel)
-                    .reduce(|acc, element| {
-                        Color(array::from_fn(|index| acc.0[index] + element.0[index]))
-                    })
-                    .unwrap_or_default()
-                    .0
-                    .map(|e| e / self.screen.samples_per_pixel as f32),
-                );
+                    };
 
-                image.data.push(color.into());
-            }
-        }
-        image
+                    let ray = Ray::new(hit_point, direction);
+
+                    self.ray_color(&ray, remaining_depth - 1).map(|color| {
+                        color * 0.5 // TODO: dont hardcode 0.5
+                    })
+                }
+            })
+            .flatten()
     }
 }
 
