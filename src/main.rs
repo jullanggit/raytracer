@@ -156,7 +156,7 @@ impl Scene {
                             (pixel_position - self.camera.position).normalize(),
                         );
 
-                        self.ray_color(&ray, 5) // TODO: dont hardcode max_depth
+                        self.ray_color(&ray, self.screen.max_bounces) // TODO: dont hardcode max_depth
                     })
                     .take(self.screen.samples_per_pixel)
                     .map(Option::unwrap_or_default)
@@ -203,15 +203,31 @@ impl Scene {
                 .is_some()
         }
 
+        if remaining_depth == 0 {
+            return None;
+        }
+
         let nearest_intersection = nearest_shape_intersection(&self.spheres, ray)
             .into_iter()
             .chain(nearest_shape_intersection(&self.planes, ray))
             .chain(nearest_shape_intersection(&self.triangles, ray))
-            .min_by(|&(a, _, _, _), &(b, _, _, _)| a.partial_cmp(&b).unwrap());
+            .filter(|&(time, ..)| time > 0.001)
+            .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
-        nearest_intersection
-            .map(|(_, hit_point, normal, color)| {
-                if remaining_depth == 0 {
+        nearest_intersection.and_then(|(_, hit_point, normal, color)| {
+            let direction = {
+                let candidate = NormalizedVec3::random();
+                if candidate.inner().dot(*normal.inner()) > 0.0 {
+                    candidate
+                } else {
+                    -candidate
+                }
+            };
+
+            let ray = Ray::new(hit_point, direction);
+
+            self.ray_color(&ray, remaining_depth - 1).map_or_else(
+                || {
                     let light_direction = (self.light.position - hit_point).normalize();
                     let light_ray = Ray::new(hit_point, light_direction);
 
@@ -227,24 +243,10 @@ impl Scene {
 
                         self.light.color * color * color_coefficient
                     })
-                } else {
-                    let direction = {
-                        let candidate = NormalizedVec3::random();
-                        if candidate.inner().dot(*normal.inner()).is_sign_positive() {
-                            candidate
-                        } else {
-                            -candidate
-                        }
-                    };
-
-                    let ray = Ray::new(hit_point, direction);
-
-                    self.ray_color(&ray, remaining_depth - 1).map(|color| {
-                        color * 0.5 // TODO: dont hardcode 0.5
-                    })
-                }
-            })
-            .flatten()
+                },
+                |color| Some(color * 0.5),
+            )
+        })
     }
 }
 
@@ -255,6 +257,7 @@ struct Screen {
     resolution_width: usize,
     resolution_height: usize,
     samples_per_pixel: usize,
+    max_bounces: usize,
 }
 impl Screen {
     const fn new(
@@ -264,6 +267,7 @@ impl Screen {
         resolution_width: usize,
         resolution_height: usize,
         samples_per_pixel: usize,
+        max_bounces: usize,
     ) -> Self {
         Self {
             top_left,
@@ -272,6 +276,7 @@ impl Screen {
             resolution_width,
             resolution_height,
             samples_per_pixel,
+            max_bounces,
         }
     }
 }

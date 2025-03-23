@@ -88,7 +88,7 @@ impl NormalizedVec3 {
         &self.0
     }
     pub fn random() -> Self {
-        Vec3::new(rng::f32(), rng::f32(), rng::f32()).normalize()
+        Vec3::new(rng::f32() - 0.5, rng::f32() - 0.5, rng::f32() - 0.5).normalize() // -0.5..0.5
     }
 }
 
