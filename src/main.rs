@@ -95,7 +95,8 @@ impl From<Color<f32>> for Color<u8> {
         Self(value.0.map(|num| {
             debug_assert!((0.0..=1.).contains(&num));
 
-            (num * 255.) as u8
+            // gamma 2 correction
+            (num.sqrt() * 255.) as u8
         }))
     }
 }
@@ -215,15 +216,7 @@ impl Scene {
             .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
         nearest_intersection.and_then(|(_, hit_point, normal, color)| {
-            let direction = {
-                let candidate = NormalizedVec3::random();
-                if candidate.inner().dot(*normal.inner()) > 0.0 {
-                    candidate
-                } else {
-                    -candidate
-                }
-            };
-
+            let direction = (normal + NormalizedVec3::random()).normalize();
             let ray = Ray::new(hit_point, direction);
 
             self.ray_color(&ray, remaining_depth - 1).map_or_else(

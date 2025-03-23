@@ -98,3 +98,10 @@ impl Neg for NormalizedVec3 {
         Self(-*self.inner())
     }
 }
+
+impl Add for NormalizedVec3 {
+    type Output = Vec3;
+    fn add(self, rhs: Self) -> Self::Output {
+        self.0 + rhs.0
+    }
+}
