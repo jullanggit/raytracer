@@ -1,7 +1,9 @@
 use std::{
+    array,
     cell::Cell,
     f32,
     mem::{Assume, TransmuteFrom},
+    simd::Simd,
 };
 
 thread_local! {
@@ -40,18 +42,17 @@ impl Rng {
     /// Efficiently calculates two f32's at once. [0..1; 2]
     // Unlike the rest of this module, this function was actually created by me!
     pub fn f32_by_two(&mut self) -> [f32; 2] {
-        let u64 = self.u64();
-
         let bits = 32;
         let mantissa = f32::MANTISSA_DIGITS - 1;
 
         let f32_mantissa = (1 << (mantissa)) - 1;
         let mantissa_mask: u64 = f32_mantissa + (f32_mantissa << bits);
 
-        let masked_u64 = u64 & mantissa_mask;
-
         let one: u64 = 1.0_f32.to_bits().into();
         let one_by_two = (one << bits) + one;
+
+        let u64 = self.u64();
+        let masked_u64 = u64 & mantissa_mask;
 
         // SAFETY: As we specify Assume::NOTHING, the compiler guarantees memory safety
         let f32s: [f32; 2] = unsafe {
@@ -60,17 +61,44 @@ impl Rng {
 
         f32s.map(|f32| f32 - 1.)
     }
+    /// Efficiently calculates eight f32's at once. [0..1; 2]
+    // Unlike the rest of this module, this function was actually created by me!
+    // TODO: Detect simd lanes at compile time
+    pub fn simd_f32(&mut self) -> Simd<f32, 8> {
+        let bits = 32;
+        let mantissa = f32::MANTISSA_DIGITS - 1;
+
+        let exponent = Simd::splat((1 << (bits - 2)) - (1 << mantissa));
+
+        // SAFETY: As we specify Assume::NOTHING, the compiler guarantees memory safety
+        let u32s: Simd<u32, 8> = Simd::from_array(unsafe {
+            TransmuteFrom::<[u64; 4], { Assume::NOTHING }>::transmute(array::from_fn(|_| {
+                self.u64()
+            }))
+        }) >> (bits - mantissa);
+
+        // SAFETY: As we specify Assume::NOTHING, the compiler guarantees memory safety
+        let f32s: Simd<f32, 8> = Simd::from_array(unsafe {
+            TransmuteFrom::<_, { Assume::NOTHING }>::transmute((u32s + exponent).to_array())
+        });
+
+        f32s - Simd::splat(1.)
+    }
 }
 
 /// 0..1
 pub fn f32() -> f32 {
+    with_rng(Rng::f32)
+}
+
+pub fn with_rng<T>(f: impl Fn(&mut Rng) -> T) -> T {
     RNG.with(|rng| {
         let mut current = rng.replace(Rng(0));
 
-        let f32 = current.f32();
+        let res = f(&mut current);
 
         rng.replace(current);
 
-        f32
+        res
     })
 }
