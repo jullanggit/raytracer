@@ -29,6 +29,9 @@ impl Vec3 {
     pub fn normalize(self) -> NormalizedVec3 {
         NormalizedVec3(self / self.length())
     }
+    pub fn near_zero(&self) -> bool {
+        self.x.abs() < f32::EPSILON && self.y.abs() < f32::EPSILON && self.z.abs() < f32::EPSILON
+    }
 }
 
 impl Add for Vec3 {
@@ -87,8 +90,18 @@ impl NormalizedVec3 {
     pub const fn inner(&self) -> &Vec3 {
         &self.0
     }
+    pub fn near_zero(&self) -> bool {
+        self.0.near_zero()
+    }
     pub fn random() -> Self {
         Vec3::new(rng::f32() - 0.5, rng::f32() - 0.5, rng::f32() - 0.5).normalize() // -0.5..0.5
+    }
+    pub fn reflect(&self, normal: Self) -> Self {
+        let out = Self(self.0 - normal.0 * 2. * self.0.dot(normal.0));
+
+        debug_assert!(out.0.length() == 1.);
+
+        out
     }
 }
 

@@ -191,6 +191,7 @@ impl Scene {
         ) -> Option<(f32, Vec3, NormalizedVec3, u16)> {
             iter.into_iter()
                 .filter_map(|shape| shape.intersects(ray).map(|time| (shape, time)))
+                .filter(|&(_, time)| time > 0.001)
                 .min_by(|&(_, time1), &(_, time2)| {
                     time1
                         .partial_cmp(&time2)
@@ -225,36 +226,36 @@ impl Scene {
             .into_iter()
             .chain(nearest_shape_intersection(&self.planes, ray))
             .chain(nearest_shape_intersection(&self.triangles, ray))
-            .filter(|&(time, ..)| time > 0.001)
             .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
         nearest_intersection.and_then(|(_, hit_point, normal, shape_material_index)| {
-            let shape_color = materials[shape_material_index as usize].color;
+            let shape_material = &materials[shape_material_index as usize];
 
-            let direction = (normal + NormalizedVec3::random()).normalize();
-            let ray = Ray::new(hit_point, direction);
+            if let Some((ray, attenuation)) = shape_material.scatter(ray, normal, hit_point) {
+                self.ray_color(&ray, remaining_depth - 1, materials)
+                    .map_or_else(
+                        || {
+                            let light_direction = (self.light.position - hit_point).normalize();
+                            let light_ray = Ray::new(hit_point, light_direction);
 
-            self.ray_color(&ray, remaining_depth - 1, materials)
-                .map_or_else(
-                    || {
-                        let light_direction = (self.light.position - hit_point).normalize();
-                        let light_ray = Ray::new(hit_point, light_direction);
+                            // If the ray to the light source is not occluded by any other shape
+                            (is_occluded(&self.spheres, &light_ray)
+                                || is_occluded(&self.planes, &light_ray)
+                                || is_occluded(&self.triangles, &light_ray))
+                            .not()
+                            .then(|| {
+                                // How straight the light is falling on the surface
+                                let color_coefficient =
+                                    light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
 
-                        // If the ray to the light source is not occluded by any other shape
-                        (is_occluded(&self.spheres, &light_ray)
-                            || is_occluded(&self.planes, &light_ray)
-                            || is_occluded(&self.triangles, &light_ray))
-                        .not()
-                        .then(|| {
-                            // How straight the light is falling on the surface
-                            let color_coefficient =
-                                light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
-
-                            self.light.color * shape_color * color_coefficient
-                        })
-                    },
-                    |ray_color| Some(shape_color * ray_color * 0.5), // TODO: see if just multiplying the colors is right
-                )
+                                self.light.color * attenuation * color_coefficient
+                            })
+                        },
+                        |ray_color| Some(attenuation * ray_color * 0.5), // TODO: see if just multiplying the colors is right
+                    )
+            } else {
+                Some(Color([0.; 3]))
+            }
         })
     }
 }
