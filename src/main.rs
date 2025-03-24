@@ -126,6 +126,7 @@ impl Ray {
     }
 }
 
+#[derive(Debug)]
 struct Scene {
     screen: Screen,
     camera: Camera,
@@ -260,6 +261,7 @@ impl Scene {
     }
 }
 
+#[derive(Debug)]
 struct Screen {
     top_left: Vec3,
     top_edge: Vec3,
@@ -291,6 +293,7 @@ impl Screen {
     }
 }
 
+#[derive(Debug)]
 struct Camera {
     position: Vec3,
 }
@@ -300,6 +303,7 @@ impl Camera {
     }
 }
 
+#[derive(Debug)]
 struct Light {
     position: Vec3,
     color: Color<f32>,

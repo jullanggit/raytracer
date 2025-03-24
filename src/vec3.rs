@@ -97,11 +97,7 @@ impl NormalizedVec3 {
         Vec3::new(rng::f32() - 0.5, rng::f32() - 0.5, rng::f32() - 0.5).normalize() // -0.5..0.5
     }
     pub fn reflect(&self, normal: Self) -> Self {
-        let out = Self(self.0 - normal.0 * 2. * self.0.dot(normal.0));
-
-        debug_assert!(out.0.length() == 1.);
-
-        out
+        Self(self.0 - normal.0 * 2. * self.0.dot(normal.0))
     }
 }
 

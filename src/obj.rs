@@ -1,6 +1,12 @@
 use std::fs;
 
-use crate::{Color, config::push_material, material::Material, shapes::Triangle, vec3::Vec3};
+use crate::{
+    Color,
+    config::push_material,
+    material::{Material, MaterialKind},
+    shapes::Triangle,
+    vec3::Vec3,
+};
 
 pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
     let string = fs::read_to_string(path).unwrap();
@@ -18,7 +24,10 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
         .map(|line| line[2..].trim().into())
         .collect();
 
-    let index = push_material(Material::new(Color([0.5; 3])), materials);
+    let index = push_material(
+        Material::new(MaterialKind::Lambertian, Color([0.5; 3])),
+        materials,
+    );
 
     lines
         .filter(|line| line.starts_with('f'))

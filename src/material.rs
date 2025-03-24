@@ -10,11 +10,8 @@ pub struct Material {
 }
 
 impl Material {
-    pub const fn new(color: Color<f32>) -> Self {
-        Self {
-            kind: MaterialKind::Lambertian,
-            color,
-        }
+    pub const fn new(kind: MaterialKind, color: Color<f32>) -> Self {
+        Self { kind, color }
     }
 
     /// Returns the scattered ray, if it wasn't absorbed
@@ -55,4 +52,13 @@ impl Material {
 pub enum MaterialKind {
     Lambertian,
     Metal,
+}
+impl From<&str> for MaterialKind {
+    fn from(value: &str) -> Self {
+        match value.trim() {
+            "lambertian" => Self::Lambertian,
+            "metal" => Self::Metal,
+            other => panic!("Unknown material: {other}"),
+        }
+    }
 }
