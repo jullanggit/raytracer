@@ -39,10 +39,13 @@ impl Material {
                     self.color,
                 ))
             }
-            MaterialKind::Metal => {
-                let direction = ray.direction.reflect(normal);
+            MaterialKind::Metal { fuzziness } => {
+                let direction = (*ray.direction.reflect(normal).inner()
+                    + *NormalizedVec3::random().inner() * fuzziness)
+                    .normalize();
 
-                Some((Ray::new(hit_point, direction), self.color))
+                (direction.inner().dot(*normal.inner()) > 0.)
+                    .then_some((Ray::new(hit_point, direction), self.color))
             }
         }
     }
@@ -51,13 +54,18 @@ impl Material {
 #[derive(Debug, PartialEq)]
 pub enum MaterialKind {
     Lambertian,
-    Metal,
+    Metal { fuzziness: f32 },
 }
 impl From<&str> for MaterialKind {
     fn from(value: &str) -> Self {
-        match value.trim() {
+        let mut split = value.split_whitespace();
+        let kind = split.next().unwrap();
+
+        match kind {
             "lambertian" => Self::Lambertian,
-            "metal" => Self::Metal,
+            "metal" => Self::Metal {
+                fuzziness: split.next().unwrap().parse().unwrap(),
+            },
             other => panic!("Unknown material: {other}"),
         }
     }
