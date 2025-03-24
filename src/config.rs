@@ -19,11 +19,6 @@ pub fn parse() -> Scene {
 
     let mut materials = Vec::new();
 
-    let push_material = |values: &mut Split<&str>, materials: &mut Vec<Material>| {
-        materials.push(Material::new(values.next().unwrap().into()));
-        (materials.len() - 1).try_into().unwrap()
-    };
-
     while screen.is_none() | camera.is_none() | spheres.is_none() | light.is_none() {
         match iter.next().unwrap().split_once('(').unwrap() {
             ("screen", value) => {
@@ -45,7 +40,7 @@ pub fn parse() -> Scene {
                     Sphere::new(
                         values.next().unwrap().into(),
                         values.next().unwrap().parse().unwrap(),
-                        push_material(values, &mut materials),
+                        push_material_with_values(values, &mut materials),
                     )
                 }));
             }
@@ -54,7 +49,7 @@ pub fn parse() -> Scene {
                     Plane::new(
                         values.next().unwrap().into(),
                         Vec3::normalize(values.next().unwrap().into()),
-                        push_material(values, &mut materials),
+                        push_material_with_values(values, &mut materials),
                     )
                 }));
             }
@@ -66,7 +61,7 @@ pub fn parse() -> Scene {
                         values.next().unwrap().into(),
                         values.next().unwrap().into(),
                         values.next().unwrap().into(),
-                        push_material(values, &mut materials),
+                        push_material_with_values(values, &mut materials),
                     )
                 }));
             }
@@ -100,6 +95,22 @@ pub fn parse() -> Scene {
         materials,
         light: light.unwrap(),
     }
+}
+
+fn push_material_with_values(values: &mut Split<&str>, materials: &mut Vec<Material>) -> u16 {
+    push_material(Material::new(values.next().unwrap().into()), materials)
+}
+pub fn push_material(material: Material, materials: &mut Vec<Material>) -> u16 {
+    materials
+        .iter()
+        .position(|existing_material| *existing_material == material)
+        .unwrap_or_else(|| {
+            let index = materials.len();
+            materials.push(material);
+            index
+        })
+        .try_into()
+        .unwrap()
 }
 
 fn single_item_parse<T>(value: &str, mut f: impl FnMut(&mut Split<&str>) -> T) -> T {
