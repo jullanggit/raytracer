@@ -20,7 +20,8 @@ pub fn parse() -> Scene {
     let mut materials = Vec::new();
 
     while screen.is_none() | camera.is_none() | spheres.is_none() | light.is_none() {
-        match iter.next().unwrap().split_once('(').unwrap() {
+        let next = iter.next().unwrap();
+        match next[..next.len() - 1].split_once('(').unwrap() {
             ("screen", value) => {
                 screen = Some(single_item_parse(value, |values| {
                     Screen::new(
@@ -34,7 +35,7 @@ pub fn parse() -> Scene {
                     )
                 }));
             }
-            ("camera", value) => camera = Some(Camera::new(value[..value.len() - 1].into())),
+            ("camera", value) => camera = Some(Camera::new(value[..value.len()].into())),
             ("spheres", value) => {
                 spheres = Some(multi_item_parse(value, |values| {
                     Sphere::new(
@@ -119,7 +120,7 @@ pub fn push_material(material: Material, materials: &mut Vec<Material>) -> u16 {
 }
 
 fn single_item_parse<T>(value: &str, mut f: impl FnMut(&mut Split<&str>) -> T) -> T {
-    let mut values = value[..value.len() - 1].split(", "); // Skip closing parenthesis with len - 1
+    let mut values = value.split(", "); // Skip closing parenthesis with len - 1
 
     let parsed = f(&mut values);
 
