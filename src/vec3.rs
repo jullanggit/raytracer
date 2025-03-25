@@ -23,8 +23,15 @@ impl Vec3 {
             z: self.x * rhs.y - rhs.x * self.y,
         }
     }
+    pub fn length_squared(&self) -> f32 {
+        self.dot(*self)
+    }
     pub fn length(&self) -> f32 {
-        self.dot(*self).sqrt()
+        self.length_squared().sqrt()
+    }
+    pub fn is_normalized(&self) -> bool {
+        const TOLERANCE: f32 = 1e-6;
+        self.length() <= 1. + TOLERANCE && self.length() >= 1. - TOLERANCE
     }
     pub fn normalize(self) -> NormalizedVec3 {
         NormalizedVec3(self / self.length())
@@ -99,6 +106,30 @@ impl NormalizedVec3 {
     pub fn reflect(&self, normal: Self) -> Self {
         Self(self.0 - normal.0 * 2. * self.0.dot(normal.0))
     }
+    pub fn dot(&self, other: Self) -> f32 {
+        self.inner().dot(*other.inner())
+    }
+    pub fn refract(&self, normal: Self, refractive_index: f32) -> Self {
+        // If it enters or exits the shape
+        let refractive_ratio = if self.dot(normal) < 0. {
+            1. / refractive_index
+        } else {
+            refractive_index
+        };
+
+        let cos = self.neg().dot(normal).min(1.);
+        let perpendicular = (self.0 + normal * cos) * refractive_ratio;
+        let parallel = normal * -((1. - perpendicular.length_squared()).abs().sqrt());
+
+        let out = perpendicular + parallel;
+        debug_assert!(
+            (perpendicular + parallel).is_normalized(),
+            "vector: {out:?}, length: {:?}",
+            out.length()
+        );
+
+        Self(out)
+    }
 }
 
 impl Neg for NormalizedVec3 {
@@ -112,5 +143,19 @@ impl Add for NormalizedVec3 {
     type Output = Vec3;
     fn add(self, rhs: Self) -> Self::Output {
         self.0 + rhs.0
+    }
+}
+
+impl Mul<f32> for NormalizedVec3 {
+    type Output = Vec3;
+    fn mul(self, rhs: f32) -> Self::Output {
+        self.0 * rhs
+    }
+}
+
+impl Add<Vec3> for NormalizedVec3 {
+    type Output = Vec3;
+    fn add(self, rhs: Vec3) -> Self::Output {
+        self.0 + rhs
     }
 }

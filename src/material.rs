@@ -47,6 +47,11 @@ impl Material {
                 (direction.inner().dot(*normal.inner()) > 0.)
                     .then_some((Ray::new(hit_point, direction), self.color))
             }
+            MaterialKind::Glass { refractive_index } => {
+                let refracted_direction = ray.direction.refract(normal, refractive_index);
+
+                Some((Ray::new(hit_point, refracted_direction), Color([1.; 3])))
+            }
         }
     }
 }
@@ -55,6 +60,7 @@ impl Material {
 pub enum MaterialKind {
     Lambertian,
     Metal { fuzziness: f32 },
+    Glass { refractive_index: f32 },
 }
 impl From<&str> for MaterialKind {
     fn from(value: &str) -> Self {
@@ -65,6 +71,9 @@ impl From<&str> for MaterialKind {
             "lambertian" => Self::Lambertian,
             "metal" => Self::Metal {
                 fuzziness: split.next().unwrap().parse().unwrap(),
+            },
+            "glass" => Self::Glass {
+                refractive_index: split.next().unwrap().parse().unwrap(),
             },
             other => panic!("Unknown material: {other}"),
         }
