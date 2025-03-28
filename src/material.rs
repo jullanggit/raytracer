@@ -28,10 +28,10 @@ impl Material {
             MaterialKind::Lambertian => {
                 let direction = (normal + NormalizedVec3::random()).normalize();
 
-                // Avoid division by zero etc.
                 Some((
                     Ray::new(
                         hit_point,
+                        // Avoid division by zero etc.
                         if direction.near_zero() {
                             normal
                         } else {
@@ -42,12 +42,19 @@ impl Material {
                 ))
             }
             MaterialKind::Metal { fuzziness } => {
-                let direction = (*ray.direction.reflect(normal).inner()
-                    + *NormalizedVec3::random().inner() * fuzziness)
-                    .normalize();
+                let direction = ray.direction.reflect(normal); // reflection
 
-                (direction.inner().dot(*normal.inner()) > 0.)
-                    .then_some((Ray::new(hit_point, direction), self.color))
+                if fuzziness == 0.0 {
+                    Some((Ray::new(hit_point, direction), self.color))
+                } else {
+                    // add fuzziness
+                    let direction =
+                        (*direction.inner() + NormalizedVec3::random() * fuzziness).normalize();
+
+                    // Return None if the ray would end up in the object
+                    (direction.dot(normal) > 0.)
+                        .then_some((Ray::new(hit_point, direction), self.color))
+                }
             }
             MaterialKind::Glass { refractive_index } => {
                 // If it enters or exits the shape
