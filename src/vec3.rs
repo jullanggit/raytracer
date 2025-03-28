@@ -94,6 +94,12 @@ impl From<&str> for Vec3 {
 #[repr(transparent)]
 pub struct NormalizedVec3(Vec3);
 impl NormalizedVec3 {
+    /// Checks for normalization in debug mode
+    pub fn new(vec: Vec3) -> Self {
+        debug_assert!(vec.is_normalized());
+
+        Self(vec)
+    }
     pub const fn inner(&self) -> &Vec3 {
         &self.0
     }
@@ -108,27 +114,6 @@ impl NormalizedVec3 {
     }
     pub fn dot(&self, other: Self) -> f32 {
         self.inner().dot(*other.inner())
-    }
-    pub fn refract(&self, normal: Self, refractive_index: f32) -> Self {
-        // If it enters or exits the shape
-        let refractive_ratio = if self.dot(normal) < 0. {
-            1. / refractive_index
-        } else {
-            refractive_index
-        };
-
-        let cos = self.neg().dot(normal).min(1.);
-        let perpendicular = (self.0 + normal * cos) * refractive_ratio;
-        let parallel = normal * -((1. - perpendicular.length_squared()).abs().sqrt());
-
-        let out = perpendicular + parallel;
-        debug_assert!(
-            (perpendicular + parallel).is_normalized(),
-            "vector: {out:?}, length: {:?}",
-            out.length()
-        );
-
-        Self(out)
     }
 }
 

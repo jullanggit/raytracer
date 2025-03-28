@@ -1,5 +1,7 @@
+use std::ops::Neg;
+
 use crate::{
-    Color, Ray,
+    Color, Ray, rng,
     vec3::{NormalizedVec3, Vec3},
 };
 
@@ -48,9 +50,41 @@ impl Material {
                     .then_some((Ray::new(hit_point, direction), self.color))
             }
             MaterialKind::Glass { refractive_index } => {
-                let refracted_direction = ray.direction.refract(normal, refractive_index);
+                // If it enters or exits the shape
+                let (refractive_index, normal) = if ray.direction.dot(normal) < 0. {
+                    (1. / refractive_index, normal)
+                } else {
+                    (refractive_index, -normal)
+                };
 
-                Some((Ray::new(hit_point, refracted_direction), Color([1.; 3])))
+                let cos = ray.direction.neg().dot(normal).min(1.);
+                let sin = (1. - cos * cos).sqrt();
+
+                let reflectance = {
+                    let r0 = (1. - refractive_index) / (1. + refractive_index);
+                    let r0 = r0 * r0;
+                    r0 + (1. - r0) * (1. - cos).powi(5)
+                };
+
+                let direction = if refractive_index * sin < 1.0 || reflectance < rng::f32() {
+                    // refract
+                    let perpendicular = (*ray.direction.inner() + normal * cos) * refractive_index;
+                    let discriminant = 1. - refractive_index * refractive_index * (1. - cos * cos);
+                    let parallel = normal * -discriminant.sqrt();
+
+                    let out = perpendicular + parallel;
+                    debug_assert!(
+                        (perpendicular + parallel).is_normalized(),
+                        "vector: {out:?}, length: {:?}",
+                        out.length()
+                    );
+
+                    NormalizedVec3::new(out)
+                } else {
+                    ray.direction.reflect(normal)
+                };
+
+                Some((Ray::new(hit_point, direction), Color([1.; 3])))
             }
         }
     }
