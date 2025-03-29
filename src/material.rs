@@ -1,4 +1,4 @@
-use std::ops::Neg;
+use std::ops::Neg as _;
 
 use crate::{
     Color, Ray, rng,
@@ -105,6 +105,7 @@ pub enum MaterialKind {
     Metal { fuzziness: f32 },
     Glass { refractive_index: f32 },
 }
+#[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
 impl From<&str> for MaterialKind {
     fn from(value: &str) -> Self {
         let mut split = value.split_whitespace();
