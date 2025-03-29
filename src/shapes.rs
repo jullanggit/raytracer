@@ -151,6 +151,7 @@ impl Triangle {
         let ap = *point - self.a; // a -> p
 
         // Dot products
+        // TODO: d00-d11 and the denominator can be precomputed
         let d00 = self.e1.dot(self.e1);
         let d01 = self.e1.dot(self.e2);
         let d11 = self.e2.dot(self.e2);

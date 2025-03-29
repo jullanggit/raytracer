@@ -42,7 +42,8 @@ impl Material {
                 ))
             }
             MaterialKind::Metal { fuzziness } => {
-                let direction = ray.direction.reflect(normal); // reflection
+                // reflection
+                let direction = ray.direction.reflect(normal);
 
                 if fuzziness == 0.0 {
                     Some((Ray::new(hit_point, direction), self.color))
@@ -67,6 +68,7 @@ impl Material {
                 let cos = ray.direction.neg().dot(normal).min(1.);
                 let sin = (1. - cos * cos).sqrt();
 
+                // schlick approximation
                 let reflectance = {
                     let r0 = (1. - refractive_index) / (1. + refractive_index);
                     let r0 = r0 * r0;

@@ -21,6 +21,7 @@ pub fn parse() -> Scene {
 
     while screen.is_none() | camera.is_none() | spheres.is_none() | light.is_none() {
         let next = iter.next().unwrap();
+        // split into field and value
         match next[..next.len() - 1].split_once('(').unwrap() {
             ("screen", value) => {
                 screen = Some(single_item_parse(value, |values| {

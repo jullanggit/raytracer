@@ -24,14 +24,17 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
         .map(|line| line[2..].trim().into())
         .collect();
 
+    // Push the default material
+    // TODO: parse materials
     let index = push_material(
         Material::new(MaterialKind::Lambertian, Color([0.5; 3])),
         materials,
     );
 
     lines
-        .filter(|line| line.starts_with('f'))
+        .filter(|line| line.starts_with('f')) // get faces
         .flat_map(|line| {
+            // get vertices and normals
             let mut iter = line[1..].split_whitespace().map(|part| {
                 let mut parts = part.splitn(3, '/');
 
@@ -44,6 +47,8 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
 
             let first = iter.next().unwrap();
 
+            // Fan triangulation
+            // TODO: maybe use a better approach
             iter.map_windows(move |vertices: &[_; 2]| {
                 Triangle::new(
                     first.0,
