@@ -34,7 +34,7 @@ impl Vec3 {
         self.length() <= 1. + TOLERANCE && self.length() >= 1. - TOLERANCE
     }
     pub fn normalize(self) -> NormalizedVec3 {
-        NormalizedVec3(self / self.length())
+        NormalizedVec3::new(self / self.length())
     }
     pub fn near_zero(&self) -> bool {
         self.x.abs() < f32::EPSILON && self.y.abs() < f32::EPSILON && self.z.abs() < f32::EPSILON
@@ -110,7 +110,7 @@ impl NormalizedVec3 {
         Vec3::new(rng::f32() - 0.5, rng::f32() - 0.5, rng::f32() - 0.5).normalize() // -0.5..0.5
     }
     pub fn reflect(&self, normal: Self) -> Self {
-        Self(self.0 - normal.0 * 2. * self.0.dot(normal.0))
+        Self::new(self.0 - normal.0 * 2. * self.0.dot(normal.0))
     }
     pub fn dot(&self, other: Self) -> f32 {
         self.inner().dot(*other.inner())
@@ -120,7 +120,7 @@ impl NormalizedVec3 {
 impl Neg for NormalizedVec3 {
     type Output = Self;
     fn neg(self) -> Self::Output {
-        Self(-*self.inner())
+        Self::new(-*self.inner())
     }
 }
 
