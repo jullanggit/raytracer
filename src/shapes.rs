@@ -41,7 +41,7 @@ impl Shape for Sphere {
             - delta_origin.dot(delta_origin)
             + self.radius * self.radius;
 
-        if discriminant < 0.0 {
+        if discriminant < 0. {
             return None; // No solution to quadratic formula
         }
 

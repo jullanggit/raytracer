@@ -18,6 +18,8 @@ impl Material {
 
     /// Returns the scattered ray, if it wasn't absorbed or the light color
     pub fn scatter(&self, ray: &Ray, normal: NormalizedVec3, hit_point: Vec3) -> Scatter {
+        let hit_point = hit_point + normal * 1e-4;
+
         match self.kind {
             MaterialKind::Lambertian => {
                 let direction = (normal + NormalizedVec3::random()).normalize();
