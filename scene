@@ -1,6 +1,6 @@
 screen(-1 1 10, 2 0 0, 0 -2 0, 1000, 1000, 50, 30)
-camera(0 0 20)
-spheres((0 0 0, 1.5, glass 1.5, 1 1 1), (-2 0 0, 0.5, light, 1 1 1), (0 2 0, 0.5, light, 1 1 1), (2 0 0, 0.5, lambertian, 0 0 1), (3 0 -10, 3, lambertian, 1 0 0))
+camera(0 0 11)
+spheres((0 0 0, 1, light, 1 1 1))
 planes()
 obj()
 triangles()

@@ -27,7 +27,12 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
     // Push the default material
     // TODO: parse materials
     let index = push_material(
-        Material::new(MaterialKind::Lambertian, Color([0.5; 3])),
+        Material::new(
+            MaterialKind::Glass {
+                refractive_index: 1.5,
+            },
+            Color([0.5; 3]),
+        ),
         materials,
     );
 

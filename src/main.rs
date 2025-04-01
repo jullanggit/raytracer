@@ -14,7 +14,14 @@ mod shapes;
 mod vec3;
 
 use crate::shapes::{Plane, Sphere};
-use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
+use std::{
+    array,
+    fs::File,
+    io::Write as _,
+    mem::size_of,
+    ops::{Add, Mul},
+    slice,
+};
 
 use material::{Material, Scatter};
 use shapes::{Shape, Triangle};
@@ -81,6 +88,12 @@ impl Mul<f32> for Color<f32> {
     type Output = Self;
     fn mul(self, rhs: f32) -> Self::Output {
         Self(self.0.map(|num| num * rhs))
+    }
+}
+impl Add for Color<f32> {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(array::from_fn(|index| self.0[index] + rhs.0[index]))
     }
 }
 impl From<Color<f32>> for Color<u8> {
@@ -195,8 +208,6 @@ impl Scene {
                     )
                 })
         }
-        let skybox = Color([0.2, 0.2, 0.5]); // TODO: make the color of the skybox configurable
-
         if remaining_depth == 0 {
             return Color([0.; 3]);
         }
@@ -207,18 +218,25 @@ impl Scene {
             .chain(nearest_shape_intersection(&self.triangles, ray))
             .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
-        nearest_intersection.map_or(skybox, |(_, hit_point, normal, shape_material_index)| {
-            let shape_material = &materials[shape_material_index as usize];
+        nearest_intersection.map_or_else(
+            || {
+                let a = 0.5 * (ray.direction.inner().y + 1.0);
 
-            match shape_material.scatter(ray, normal, hit_point) {
-                Scatter::Scattered(ray, attenuation) => {
-                    // calculate color of scattered ray and mix it with the current color
-                    attenuation * self.ray_color(&ray, remaining_depth - 1, materials) // TODO: see if just multiplying the colors is right
+                Color([0.2, 0.2, 0.8]) * (1.0 - a) + Color([1.; 3]) * a
+            },
+            |(_, hit_point, normal, shape_material_index)| {
+                let shape_material = &materials[shape_material_index as usize];
+
+                match shape_material.scatter(ray, normal, hit_point) {
+                    Scatter::Scattered(ray, attenuation) => {
+                        // calculate color of scattered ray and mix it with the current color
+                        attenuation * self.ray_color(&ray, remaining_depth - 1, materials) // TODO: see if just multiplying the colors is right
+                    }
+                    Scatter::Absorbed => Color([0.; 3]),
+                    Scatter::Light(color) => color,
                 }
-                Scatter::Absorbed => Color([0.; 3]),
-                Scatter::Light(color) => color,
-            }
-        })
+            },
+        )
     }
 }
 
