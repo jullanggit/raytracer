@@ -80,14 +80,7 @@ impl Material {
                     let discriminant = 1. - refractive_index * refractive_index * (1. - cos * cos);
                     let parallel = normal * -discriminant.sqrt();
 
-                    let out = perpendicular + parallel;
-                    debug_assert!(
-                        (perpendicular + parallel).is_normalized(),
-                        "vector: {out:?}, length: {:?}",
-                        out.length()
-                    );
-
-                    NormalizedVec3::new(out)
+                    NormalizedVec3::new(perpendicular + parallel)
                 };
 
                 Scatter::Scattered(Ray::new(hit_point, direction), Color([1.; 3]))

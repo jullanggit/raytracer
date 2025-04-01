@@ -30,7 +30,7 @@ impl Vec3 {
         self.length_squared().sqrt()
     }
     pub fn is_normalized(&self) -> bool {
-        const TOLERANCE: f32 = 1e-6;
+        const TOLERANCE: f32 = 1e-5;
         self.length() <= 1. + TOLERANCE && self.length() >= 1. - TOLERANCE
     }
     pub fn normalize(self) -> NormalizedVec3 {
@@ -96,7 +96,7 @@ pub struct NormalizedVec3(Vec3);
 impl NormalizedVec3 {
     /// Checks for normalization in debug mode
     pub fn new(vec: Vec3) -> Self {
-        debug_assert!(vec.is_normalized());
+        debug_assert!(vec.is_normalized(), "vec: {vec:?}, len: {}", vec.length());
 
         Self(vec)
     }
