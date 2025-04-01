@@ -1,4 +1,3 @@
 - loading colors from textures
-- support multi-object .obj files
 - bvh
 - support .obj files without vertex normals

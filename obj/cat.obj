@@ -1,6 +1,5 @@
 # Blender 4.3.2
 # www.blender.org
-mtllib cat.mtl
 o cat
 v -3.764762 5.426412 -2.298755
 v -4.133489 0.869263 -1.183107

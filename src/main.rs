@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(iter_map_windows)]
+#![feature(iter_collect_into)]
 #![feature(transmutability)]
 #![feature(portable_simd)]
 // TODO: Remove this when optimising
