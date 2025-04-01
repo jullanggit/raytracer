@@ -72,7 +72,9 @@ impl Material {
                     r0 + (1. - r0) * (1. - cos).powi(5)
                 };
 
-                let direction = if refractive_index * sin < 1.0 || reflectance < rng::f32() {
+                let direction = if refractive_index * sin > 1.0 || rng::f32() < reflectance {
+                    ray.direction.reflect(normal)
+                } else {
                     // refract
                     let perpendicular = (*ray.direction.inner() + normal * cos) * refractive_index;
                     let discriminant = 1. - refractive_index * refractive_index * (1. - cos * cos);
@@ -86,8 +88,6 @@ impl Material {
                     );
 
                     NormalizedVec3::new(out)
-                } else {
-                    ray.direction.reflect(normal)
                 };
 
                 Scatter::Scattered(Ray::new(hit_point, direction), Color([1.; 3]))

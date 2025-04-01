@@ -195,7 +195,7 @@ impl Scene {
                     )
                 })
         }
-        let skybox = Color([0.2, 0.2, 0.8]); // TODO: make the color of the skybox configurable
+        let skybox = Color([0.2, 0.2, 0.5]); // TODO: make the color of the skybox configurable
 
         if remaining_depth == 0 {
             return Color([0.; 3]);
@@ -213,7 +213,7 @@ impl Scene {
             match shape_material.scatter(ray, normal, hit_point) {
                 Scatter::Scattered(ray, attenuation) => {
                     // calculate color of scattered ray and mix it with the current color
-                    attenuation * self.ray_color(&ray, remaining_depth - 1, materials) * 0.5 // TODO: see if just multiplying the colors is right
+                    attenuation * self.ray_color(&ray, remaining_depth - 1, materials) // TODO: see if just multiplying the colors is right
                 }
                 Scatter::Absorbed => Color([0.; 3]),
                 Scatter::Light(color) => color,
