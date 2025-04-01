@@ -20,21 +20,23 @@ impl Material {
     pub fn scatter(&self, ray: &Ray, normal: NormalizedVec3, hit_point: Vec3) -> Scatter {
         let hit_point = hit_point + normal * 1e-4;
 
+        // helper to create a Scattered with the given normal and direction
+        let scattered = |normal: NormalizedVec3, direction: NormalizedVec3| -> Scatter {
+            Scatter::Scattered(Ray::new(hit_point + normal * 1e-4, direction), self.color)
+        };
+
         match self.kind {
             MaterialKind::Lambertian => {
                 let direction = (normal + NormalizedVec3::random()).normalize();
 
-                Scatter::Scattered(
-                    Ray::new(
-                        hit_point,
-                        // Avoid division by zero etc.
-                        if direction.near_zero() {
-                            normal
-                        } else {
-                            direction
-                        },
-                    ),
-                    self.color,
+                scattered(
+                    normal,
+                    // Avoid division by zero etc.
+                    if direction.near_zero() {
+                        normal
+                    } else {
+                        direction
+                    },
                 )
             }
             MaterialKind::Metal { fuzziness } => {
@@ -42,7 +44,7 @@ impl Material {
                 let direction = ray.direction.reflect(normal);
 
                 if fuzziness == 0.0 {
-                    Scatter::Scattered(Ray::new(hit_point, direction), self.color)
+                    scattered(normal, direction)
                 } else {
                     // add fuzziness
                     let direction =
@@ -50,15 +52,17 @@ impl Material {
 
                     // Return None if the ray would end up in the object
                     if direction.dot(normal) > 0. {
-                        Scatter::Scattered(Ray::new(hit_point, direction), self.color)
+                        scattered(normal, direction)
                     } else {
                         Scatter::Absorbed
                     }
                 }
             }
             MaterialKind::Glass { refractive_index } => {
+                let outside = ray.direction.dot(normal) < 0.;
+
                 // If it enters or exits the shape
-                let (refractive_index, normal) = if ray.direction.dot(normal) < 0. {
+                let (refractive_index, normal) = if outside {
                     (1. / refractive_index, normal)
                 } else {
                     (refractive_index, -normal)
@@ -74,18 +78,20 @@ impl Material {
                     r0 + (1. - r0) * (1. - cos).powi(5)
                 };
 
-                let direction = if refractive_index * sin > 1.0 || rng::f32() < reflectance {
-                    ray.direction.reflect(normal)
+                if refractive_index * sin > 1.0 || rng::f32() < reflectance {
+                    let direction = ray.direction.reflect(normal);
+                    scattered(normal, direction)
                 } else {
                     // refract
                     let perpendicular = (*ray.direction.inner() + normal * cos) * refractive_index;
                     let discriminant = 1. - refractive_index * refractive_index * (1. - cos * cos);
                     let parallel = normal * -discriminant.sqrt();
 
-                    NormalizedVec3::new(perpendicular + parallel)
-                };
-
-                Scatter::Scattered(Ray::new(hit_point, direction), Color([1.; 3]))
+                    scattered(
+                        if outside { -normal } else { normal }, // Offset into the sphere on enter
+                        NormalizedVec3::new(perpendicular + parallel),
+                    )
+                }
             }
             MaterialKind::Light => Scatter::Light(self.color),
         }
