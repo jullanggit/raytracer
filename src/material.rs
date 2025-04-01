@@ -16,19 +16,13 @@ impl Material {
         Self { kind, color }
     }
 
-    /// Returns the scattered ray, if it wasn't absorbed
-    // TODO: see if we need to put color into this
-    pub fn scatter(
-        &self,
-        ray: &Ray,
-        normal: NormalizedVec3,
-        hit_point: Vec3,
-    ) -> Option<(Ray, Color<f32>)> {
+    /// Returns the scattered ray, if it wasn't absorbed or the light color
+    pub fn scatter(&self, ray: &Ray, normal: NormalizedVec3, hit_point: Vec3) -> Scatter {
         match self.kind {
             MaterialKind::Lambertian => {
                 let direction = (normal + NormalizedVec3::random()).normalize();
 
-                Some((
+                Scatter::Scattered(
                     Ray::new(
                         hit_point,
                         // Avoid division by zero etc.
@@ -39,22 +33,25 @@ impl Material {
                         },
                     ),
                     self.color,
-                ))
+                )
             }
             MaterialKind::Metal { fuzziness } => {
                 // reflection
                 let direction = ray.direction.reflect(normal);
 
                 if fuzziness == 0.0 {
-                    Some((Ray::new(hit_point, direction), self.color))
+                    Scatter::Scattered(Ray::new(hit_point, direction), self.color)
                 } else {
                     // add fuzziness
                     let direction =
                         (*direction.inner() + NormalizedVec3::random() * fuzziness).normalize();
 
                     // Return None if the ray would end up in the object
-                    (direction.dot(normal) > 0.)
-                        .then_some((Ray::new(hit_point, direction), self.color))
+                    if direction.dot(normal) > 0. {
+                        Scatter::Scattered(Ray::new(hit_point, direction), self.color)
+                    } else {
+                        Scatter::Absorbed
+                    }
                 }
             }
             MaterialKind::Glass { refractive_index } => {
@@ -93,10 +90,17 @@ impl Material {
                     ray.direction.reflect(normal)
                 };
 
-                Some((Ray::new(hit_point, direction), Color([1.; 3])))
+                Scatter::Scattered(Ray::new(hit_point, direction), Color([1.; 3]))
             }
+            MaterialKind::Light => Scatter::Light(self.color),
         }
     }
+}
+
+pub enum Scatter {
+    Absorbed,
+    Scattered(Ray, Color<f32>),
+    Light(Color<f32>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -104,6 +108,7 @@ pub enum MaterialKind {
     Lambertian,
     Metal { fuzziness: f32 },
     Glass { refractive_index: f32 },
+    Light,
 }
 #[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
 impl From<&str> for MaterialKind {
@@ -119,6 +124,7 @@ impl From<&str> for MaterialKind {
             "glass" => Self::Glass {
                 refractive_index: split.next().unwrap().parse().unwrap(),
             },
+            "light" => Self::Light,
             other => panic!("Unknown material: {other}"),
         }
     }

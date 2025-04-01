@@ -14,16 +14,9 @@ mod shapes;
 mod vec3;
 
 use crate::shapes::{Plane, Sphere};
-use std::{
-    array,
-    fs::File,
-    io::Write as _,
-    mem::size_of,
-    ops::{Mul, Not as _},
-    slice,
-};
+use std::{array, fs::File, io::Write as _, mem::size_of, ops::Mul, slice};
 
-use material::Material;
+use material::{Material, Scatter};
 use shapes::{Shape, Triangle};
 use vec3::{NormalizedVec3, Vec3};
 
@@ -134,7 +127,6 @@ struct Scene {
     planes: Vec<Plane>,
     triangles: Vec<Triangle>,
     materials: Vec<Material>,
-    light: Light,
 }
 
 impl Scene {
@@ -164,7 +156,6 @@ impl Scene {
                         self.ray_color(&ray, self.screen.max_bounces, &self.materials) // TODO: dont hardcode max_depth
                     })
                     .take(self.screen.samples_per_pixel)
-                    .map(Option::unwrap_or_default)
                     .reduce(|acc, element| {
                         Color(array::from_fn(|index| acc.0[index] + element.0[index]))
                     })
@@ -178,12 +169,7 @@ impl Scene {
         }
         image
     }
-    fn ray_color(
-        &self,
-        ray: &Ray,
-        remaining_depth: usize,
-        materials: &[Material],
-    ) -> Option<Color<f32>> {
+    fn ray_color(&self, ray: &Ray, remaining_depth: usize, materials: &[Material]) -> Color<f32> {
         // Helper functions for iterating over the different shapes
         /// Returns the nearest intersection, if any, for the given shape iterator
         fn nearest_shape_intersection<'a, S: Shape + 'a>(
@@ -209,18 +195,10 @@ impl Scene {
                     )
                 })
         }
-        fn is_occluded<'a, S: Shape + 'a>(
-            iter: impl IntoIterator<Item = &'a S>,
-            light_ray: &Ray,
-        ) -> bool {
-            iter.into_iter()
-                .filter(|shape| shape.intersects(light_ray).is_some())
-                .nth(1) // allow one intersection with the object itself
-                .is_some()
-        }
+        let skybox = Color([0.2, 0.2, 0.8]); // TODO: make the color of the skybox configurable
 
         if remaining_depth == 0 {
-            return None;
+            return Color([0.; 3]);
         }
 
         let nearest_intersection = nearest_shape_intersection(&self.spheres, ray)
@@ -229,33 +207,16 @@ impl Scene {
             .chain(nearest_shape_intersection(&self.triangles, ray))
             .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
-        nearest_intersection.and_then(|(_, hit_point, normal, shape_material_index)| {
+        nearest_intersection.map_or(skybox, |(_, hit_point, normal, shape_material_index)| {
             let shape_material = &materials[shape_material_index as usize];
 
-            if let Some((ray, attenuation)) = shape_material.scatter(ray, normal, hit_point) {
-                self.ray_color(&ray, remaining_depth - 1, materials)
-                    .map_or_else(
-                        || {
-                            let light_direction = (self.light.position - hit_point).normalize();
-                            let light_ray = Ray::new(hit_point, light_direction);
-
-                            // If the ray to the light source is not occluded by any other shape
-                            (is_occluded(&self.spheres, &light_ray)
-                                || is_occluded(&self.planes, &light_ray)
-                                || is_occluded(&self.triangles, &light_ray))
-                            .not()
-                            .then(|| {
-                                // How straight the light is falling on the surface
-                                let color_coefficient =
-                                    light_direction.inner().dot(*normal.inner()).max(0.); // Can maybe be optimised to not consider cases where the normal points away from the light
-
-                                self.light.color * attenuation * color_coefficient
-                            })
-                        },
-                        |ray_color| Some(attenuation * ray_color * 0.5), // TODO: see if just multiplying the colors is right
-                    )
-            } else {
-                Some(Color([0.; 3]))
+            match shape_material.scatter(ray, normal, hit_point) {
+                Scatter::Scattered(ray, attenuation) => {
+                    // calculate color of scattered ray and mix it with the current color
+                    attenuation * self.ray_color(&ray, remaining_depth - 1, materials) * 0.5 // TODO: see if just multiplying the colors is right
+                }
+                Scatter::Absorbed => Color([0.; 3]),
+                Scatter::Light(color) => color,
             }
         })
     }
@@ -300,16 +261,5 @@ struct Camera {
 impl Camera {
     const fn new(position: Vec3) -> Self {
         Self { position }
-    }
-}
-
-#[derive(Debug)]
-struct Light {
-    position: Vec3,
-    color: Color<f32>,
-}
-impl Light {
-    const fn new(position: Vec3, color: Color<f32>) -> Self {
-        Self { position, color }
     }
 }

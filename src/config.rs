@@ -1,8 +1,7 @@
 use std::{fs, str::Split};
 
 use crate::{
-    Camera, Light, Plane, Scene, Screen, Sphere, material::Material, obj, shapes::Triangle,
-    vec3::Vec3,
+    Camera, Plane, Scene, Screen, Sphere, material::Material, obj, shapes::Triangle, vec3::Vec3,
 };
 
 pub fn parse() -> Scene {
@@ -15,11 +14,15 @@ pub fn parse() -> Scene {
     let mut spheres = None;
     let mut planes = None;
     let mut triangles = None;
-    let mut light = None;
 
     let mut materials = Vec::new();
 
-    while screen.is_none() | camera.is_none() | spheres.is_none() | light.is_none() {
+    while screen.is_none()
+        | camera.is_none()
+        | spheres.is_none()
+        | planes.is_none()
+        | triangles.is_none()
+    {
         let next = iter.next().unwrap();
         // split into field and value
         match next[..next.len() - 1].split_once('(').unwrap() {
@@ -67,11 +70,6 @@ pub fn parse() -> Scene {
                     )
                 }));
             }
-            ("light", value) => {
-                light = Some(single_item_parse(value, |values| {
-                    Light::new(values.next().unwrap().into(), values.next().unwrap().into())
-                }));
-            }
             ("obj", value) => {
                 let triangles = triangles.get_or_insert_with(Vec::new);
 
@@ -95,7 +93,6 @@ pub fn parse() -> Scene {
         planes: planes.unwrap(),
         triangles: triangles.unwrap(),
         materials,
-        light: light.unwrap(),
     }
 }
 
