@@ -1,7 +1,8 @@
 use std::{fs, str::Split};
 
 use crate::{
-    Camera, Plane, Scene, Screen, Sphere, material::Material, obj, shapes::Triangle, vec3::Vec3,
+    Camera, Plane, Scene, Screen, Sphere, bvh::BvhNode, material::Material, obj, shapes::Triangle,
+    vec3::Vec3,
 };
 
 pub fn parse() -> Scene {
@@ -89,9 +90,9 @@ pub fn parse() -> Scene {
     Scene {
         screen: screen.unwrap(),
         camera: camera.unwrap(),
-        spheres: spheres.unwrap(),
-        planes: planes.unwrap(),
-        triangles: triangles.unwrap(),
+        spheres: BvhNode::new(spheres.unwrap().into_boxed_slice()),
+        planes: BvhNode::new(planes.unwrap().into_boxed_slice()),
+        triangles: BvhNode::new(triangles.unwrap().into_boxed_slice()),
         materials,
     }
 }

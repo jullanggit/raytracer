@@ -5,15 +5,23 @@ use crate::{
     vec3::{NormalizedVec3, Vec3},
 };
 
-pub trait Shape: Debug {
+pub trait Intersects {
     /// The time at which the ray intersects the object
     fn intersects(&self, ray: &Ray) -> Option<f32>;
+}
 
+pub trait Shape: Intersects + Debug {
     /// Calculates the normal of a point on the shape's surface
     fn normal(&self, point: &Vec3) -> NormalizedVec3;
 
-    /// The material index of the shape
     fn material_index(&self) -> u16;
+
+    // BVH
+    fn centroid(&self) -> Vec3;
+    /// The minimum point of the AABB enclosing the shape
+    fn min(&self) -> Vec3;
+    /// The maximum point of the AABB enclosing the shape
+    fn max(&self) -> Vec3;
 }
 
 #[derive(Debug, PartialEq)]
@@ -31,7 +39,7 @@ impl Sphere {
         }
     }
 }
-impl Shape for Sphere {
+impl Intersects for Sphere {
     // See `ray_sphere_intersection_derivation.latex` for the formula used here
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let delta_origin = ray.origin - self.center;
@@ -61,13 +69,26 @@ impl Shape for Sphere {
             (t2 > f32::EPSILON).then_some(t2)
         }
     }
-
+}
+impl Shape for Sphere {
     fn normal(&self, point: &Vec3) -> NormalizedVec3 {
         (*point - self.center).normalize()
     }
 
     fn material_index(&self) -> u16 {
         self.material_index
+    }
+
+    fn centroid(&self) -> Vec3 {
+        self.center
+    }
+
+    fn min(&self) -> Vec3 {
+        self.center - Vec3::splat(self.radius)
+    }
+
+    fn max(&self) -> Vec3 {
+        self.center + Vec3::splat(self.radius)
     }
 }
 
@@ -88,7 +109,7 @@ impl Plane {
     }
 }
 
-impl Shape for Plane {
+impl Intersects for Plane {
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let denominator = self.normal.inner().dot(*ray.direction.inner());
 
@@ -103,13 +124,26 @@ impl Shape for Plane {
         // Ensure intersection is in front of ray origin
         (t > f32::EPSILON).then_some(t)
     }
-
+}
+impl Shape for Plane {
     fn normal(&self, _point: &Vec3) -> NormalizedVec3 {
         self.normal // The normal of a plane is the same at all points on it
     }
 
     fn material_index(&self) -> u16 {
         self.material_index
+    }
+
+    fn centroid(&self) -> Vec3 {
+        self.point
+    }
+
+    fn min(&self) -> Vec3 {
+        Vec3::splat(f32::NEG_INFINITY)
+    }
+
+    fn max(&self) -> Vec3 {
+        Vec3::splat(f32::INFINITY)
     }
 }
 
@@ -179,7 +213,7 @@ impl Triangle {
         [u, v, w]
     }
 }
-impl Shape for Triangle {
+impl Intersects for Triangle {
     // Möller-Trumbore intersection algorithm
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         // Using f32::EPSILON causes some slight edge misalignments (coming from the naive triangulation) to become visible
@@ -209,6 +243,8 @@ impl Shape for Triangle {
         // Ensure intersection is in front of ray origin
         (t > TOLERANCE).then_some(t)
     }
+}
+impl Shape for Triangle {
     fn normal(&self, point: &Vec3) -> NormalizedVec3 {
         if self.different_normals {
             let barycentric_coordinates = self.barycentric_coordinates(point);
@@ -224,5 +260,23 @@ impl Shape for Triangle {
     }
     fn material_index(&self) -> u16 {
         self.material_index
+    }
+
+    fn centroid(&self) -> Vec3 {
+        self.a + (self.e1 + self.e2) / 3.
+    }
+
+    fn min(&self) -> Vec3 {
+        let b = self.a + self.e1;
+        let c = self.a + self.e2;
+
+        self.a.min(b).min(c)
+    }
+
+    fn max(&self) -> Vec3 {
+        let b = self.a + self.e1;
+        let c = self.a + self.e2;
+
+        self.a.max(b).max(c)
     }
 }

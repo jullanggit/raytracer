@@ -4,9 +4,11 @@
 #![feature(iter_collect_into)]
 #![feature(transmutability)]
 #![feature(portable_simd)]
+#![feature(iter_partition_in_place)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
+mod bvh;
 mod config;
 mod material;
 mod obj;
@@ -24,6 +26,7 @@ use std::{
     slice,
 };
 
+use bvh::BvhNode;
 use material::{Material, Scatter};
 use shapes::{Shape, Triangle};
 use vec3::{NormalizedVec3, Vec3};
@@ -137,9 +140,9 @@ impl Ray {
 struct Scene {
     screen: Screen,
     camera: Camera,
-    spheres: Vec<Sphere>,
-    planes: Vec<Plane>,
-    triangles: Vec<Triangle>,
+    spheres: BvhNode<Sphere>,
+    planes: BvhNode<Plane>,
+    triangles: BvhNode<Triangle>,
     materials: Vec<Material>,
 }
 

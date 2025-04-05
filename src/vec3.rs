@@ -13,6 +13,13 @@ impl Vec3 {
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
+    pub const fn splat(value: f32) -> Self {
+        Self {
+            x: value,
+            y: value,
+            z: value,
+        }
+    }
     pub fn dot(self, rhs: Self) -> f32 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
     }
@@ -21,6 +28,31 @@ impl Vec3 {
             x: self.y * rhs.z - rhs.y * self.z,
             y: self.z * rhs.x - rhs.z * self.x,
             z: self.x * rhs.y - rhs.x * self.y,
+        }
+    }
+    /// Element-wise min
+    pub const fn min(&self, other: Self) -> Self {
+        Self {
+            x: self.x.min(other.x),
+            y: self.y.min(other.y),
+            z: self.z.min(other.z),
+        }
+    }
+    /// Element-wise max
+    pub const fn max(&self, other: Self) -> Self {
+        Self {
+            x: self.x.max(other.x),
+            y: self.y.max(other.y),
+            z: self.z.max(other.z),
+        }
+    }
+    /// 0..=2
+    pub fn get(&self, idx: u8) -> f32 {
+        match idx {
+            0 => self.x,
+            1 => self.y,
+            2 => self.z,
+            _ => unreachable!(),
         }
     }
     pub fn length_squared(&self) -> f32 {
