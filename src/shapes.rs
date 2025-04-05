@@ -144,6 +144,8 @@ impl Triangle {
     }
     /// Create a Triangle with Vertex normals set to the normal of the overall Triangle
     pub fn default_normals(a: Vec3, b: Vec3, c: Vec3, material_index: u16) -> Self {
+        debug_assert!(a != b && a != c && b != c); // Triangle with two equal points
+
         let e1 = b - a;
         let e2 = c - a;
 
