@@ -120,7 +120,9 @@ pub struct Triangle {
     e1: Vec3,
     /// The edge from a to c
     e2: Vec3,
-    normals: [NormalizedVec3; 3],
+    normals: [NormalizedVec3; 3], // TODO: maybe extract these, they're 1/2 the size of the whole triangle
+    // 4 bytes smaller than adding an option around normals, due to alignment
+    different_normals: bool,
     material_index: u16,
 }
 impl Triangle {
@@ -135,16 +137,24 @@ impl Triangle {
             a,
             e1: b - a,
             e2: c - a,
+            different_normals: true,
             normals,
             material_index,
         }
     }
     /// Create a Triangle with Vertex normals set to the normal of the overall Triangle
-    pub fn default_normal(a: Vec3, b: Vec3, c: Vec3, material_index: u16) -> Self {
+    pub fn default_normals(a: Vec3, b: Vec3, c: Vec3, material_index: u16) -> Self {
         let e1 = b - a;
         let e2 = c - a;
 
-        Self::new(a, b, c, [e1.cross(e2).normalize(); 3], material_index)
+        Self {
+            a,
+            e1,
+            e2,
+            different_normals: true,
+            normals: [e1.cross(e2).normalize(); 3],
+            material_index,
+        }
     }
     #[expect(clippy::suspicious_operation_groupings)] // clippy doesn't like d01 * d01
     fn barycentric_coordinates(&self, point: &Vec3) -> [f32; 3] {
@@ -198,12 +208,17 @@ impl Shape for Triangle {
         (t > TOLERANCE).then_some(t)
     }
     fn normal(&self, point: &Vec3) -> NormalizedVec3 {
-        let barycentric_coordinates = self.barycentric_coordinates(point);
+        if self.different_normals {
+            self.normals[0]
+        } else {
+            let barycentric_coordinates = self.barycentric_coordinates(point);
 
-        let weighted_normals: [_; 3] =
-            array::from_fn(|index| *self.normals[index].inner() * barycentric_coordinates[index]);
+            let weighted_normals: [_; 3] = array::from_fn(|index| {
+                *self.normals[index].inner() * barycentric_coordinates[index]
+            });
 
-        (weighted_normals[0] + weighted_normals[1] + weighted_normals[2]).normalize()
+            (weighted_normals[0] + weighted_normals[1] + weighted_normals[2]).normalize()
+        }
     }
     fn material_index(&self) -> u16 {
         self.material_index

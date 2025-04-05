@@ -31,6 +31,8 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
         .map(|line| line[2..].trim().into())
         .collect();
 
+    let no_normals = normals.is_empty();
+
     let mut triangles = Vec::new();
 
     // skip(1): first object is after the first o
@@ -69,17 +71,21 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
                 // Fan triangulation
                 // TODO: maybe use a better approach
                 iter.map_windows(move |vertices: &[_; 2]| {
-                    Triangle::new(
-                        first.0,
-                        vertices[0].0,
-                        vertices[1].0,
-                        [
-                            first.1.normalize(),
-                            vertices[0].1.normalize(),
-                            vertices[1].1.normalize(),
-                        ],
-                        index,
-                    )
+                    if no_normals {
+                        Triangle::default_normals(first.0, vertices[0].0, vertices[1].0, index)
+                    } else {
+                        Triangle::new(
+                            first.0,
+                            vertices[0].0,
+                            vertices[1].0,
+                            [
+                                first.1.normalize(),
+                                vertices[0].1.normalize(),
+                                vertices[1].1.normalize(),
+                            ],
+                            index,
+                        )
+                    }
                 })
             })
             .collect_into(&mut triangles);
