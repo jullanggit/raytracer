@@ -87,6 +87,13 @@ impl Sub for Vec3 {
     }
 }
 
+impl Div for Vec3 {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self::Output {
+        Self::new(self.x / rhs.x, self.y / rhs.y, self.z / rhs.z)
+    }
+}
+
 impl Div<f32> for Vec3 {
     type Output = Self;
     fn div(self, rhs: f32) -> Self::Output {

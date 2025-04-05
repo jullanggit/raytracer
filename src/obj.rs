@@ -37,20 +37,23 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
 
     // skip(1): first object is after the first o
     for object in string.split("\no ").skip(1) {
-        let mut lines = object.lines();
+        let lines = object.lines();
 
         // either the material specified with usemtl or the default one
-        let index = lines.find(|line| line.starts_with("usemtl")).map_or_else(
-            // default material
-            || {
-                push_material(
-                    Material::new(MaterialKind::Lambertian, Color([0.5; 3])),
-                    materials,
-                )
-            },
-            // usemtl
-            |line| *name_index.get(&line[7..]).expect("Undefined material"),
-        );
+        let index = lines
+            .clone()
+            .find(|line| line.starts_with("usemtl"))
+            .map_or_else(
+                // default material
+                || {
+                    push_material(
+                        Material::new(MaterialKind::Lambertian, Color([0.5; 3])),
+                        materials,
+                    )
+                },
+                // usemtl
+                |line| *name_index.get(&line[7..]).expect("Undefined material"),
+            );
 
         lines
             .filter(|line| line.starts_with('f')) // get faces

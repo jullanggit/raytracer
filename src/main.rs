@@ -190,10 +190,15 @@ impl Scene {
         // Helper functions for iterating over the different shapes
         /// Returns the nearest intersection, if any, for the given shape iterator
         fn nearest_shape_intersection<'a, S: Shape + 'a>(
-            iter: impl IntoIterator<Item = &'a S>,
+            bvh: &BvhNode<S>,
             ray: &Ray,
         ) -> Option<(f32, Vec3, NormalizedVec3, u16)> {
-            iter.into_iter()
+            let mut items = Vec::new();
+            bvh.items(ray, &mut items);
+
+            items
+                .into_iter()
+                .flatten()
                 .filter_map(|shape| shape.intersects(ray).map(|time| (shape, time)))
                 .filter(|&(_, time)| time > 0.001)
                 .min_by(|&(_, time1), &(_, time2)| {

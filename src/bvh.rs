@@ -1,7 +1,7 @@
 use std::slice;
 
 use self::BvhNodeKind::{Branch, Leaf};
-use crate::{shapes::Shape, vec3::Vec3};
+use crate::{Ray, shapes::Shape, vec3::Vec3};
 
 #[derive(Debug)]
 pub struct BvhNode<T: Shape> {
@@ -16,15 +16,15 @@ impl<T: Shape> BvhNode<T> {
         // init root node
         let mut root = Self {
             kind: Leaf { shapes },
-            min: Vec3::splat(f32::NEG_INFINITY),
-            max: Vec3::splat(f32::INFINITY),
+            min: Vec3::splat(f32::INFINITY),
+            max: Vec3::splat(f32::NEG_INFINITY),
         };
 
         root.update_bounds();
 
         root.subdivide();
 
-        todo!()
+        root
     }
     fn update_bounds(&mut self) {
         match self.kind {
@@ -91,8 +91,8 @@ impl<T: Shape> BvhNode<T> {
 
                 let mut child_a = Self {
                     kind: Leaf { shapes: shapes_a },
-                    min: Vec3::splat(f32::NEG_INFINITY),
-                    max: Vec3::splat(f32::INFINITY),
+                    min: Vec3::splat(f32::INFINITY),
+                    max: Vec3::splat(f32::NEG_INFINITY),
                 };
                 child_a.update_bounds();
                 if recurse_a {
@@ -101,8 +101,8 @@ impl<T: Shape> BvhNode<T> {
 
                 let mut child_b = Self {
                     kind: Leaf { shapes: shapes_b },
-                    min: Vec3::splat(f32::NEG_INFINITY),
-                    max: Vec3::splat(f32::INFINITY),
+                    min: Vec3::splat(f32::INFINITY),
+                    max: Vec3::splat(f32::NEG_INFINITY),
                 };
                 child_b.update_bounds();
                 if recurse_b {
@@ -114,6 +114,27 @@ impl<T: Shape> BvhNode<T> {
                 };
             }
             Branch { .. } => unreachable!(),
+        }
+    }
+    fn intersects(&self, ray: &Ray) -> bool {
+        let t1 = (self.min - ray.origin) / *ray.direction.inner();
+        let t2 = (self.max - ray.origin) / *ray.direction.inner();
+
+        let tmin = t1.x.min(t2.x).max(t1.y.min(t2.y)).max(t1.z.min(t2.z));
+        let tmax = t1.x.max(t2.x).min(t1.y.max(t2.y)).min(t1.z.max(t2.z));
+
+        tmax >= tmin && tmax > 0.
+    }
+
+    pub fn items<'a>(&'a self, ray: &Ray, vec: &mut Vec<&'a [T]>) {
+        if self.intersects(ray) {
+            match self.kind {
+                Branch { ref children } => {
+                    children[0].items(ray, vec);
+                    children[1].items(ray, vec);
+                }
+                Leaf { ref shapes } => vec.push(shapes),
+            }
         }
     }
 }
