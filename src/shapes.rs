@@ -151,7 +151,7 @@ impl Triangle {
             a,
             e1,
             e2,
-            different_normals: true,
+            different_normals: false,
             normals: [e1.cross(e2).normalize(); 3],
             material_index,
         }
@@ -209,8 +209,6 @@ impl Shape for Triangle {
     }
     fn normal(&self, point: &Vec3) -> NormalizedVec3 {
         if self.different_normals {
-            self.normals[0]
-        } else {
             let barycentric_coordinates = self.barycentric_coordinates(point);
 
             let weighted_normals: [_; 3] = array::from_fn(|index| {
@@ -218,6 +216,8 @@ impl Shape for Triangle {
             });
 
             (weighted_normals[0] + weighted_normals[1] + weighted_normals[2]).normalize()
+        } else {
+            self.normals[0]
         }
     }
     fn material_index(&self) -> u16 {

@@ -63,7 +63,7 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
                     parts.next(); // skip texture
                     let normal_index: usize = parts.next().unwrap().parse().unwrap();
 
-                    (vertices[vertex_index - 1], normals[normal_index - 1])
+                    (vertices[vertex_index - 1], normals.get(normal_index - 1))
                 });
 
                 let first = iter.next().unwrap();
@@ -79,9 +79,9 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
                             vertices[0].0,
                             vertices[1].0,
                             [
-                                first.1.normalize(),
-                                vertices[0].1.normalize(),
-                                vertices[1].1.normalize(),
+                                first.1.unwrap().normalize(),
+                                vertices[0].1.unwrap().normalize(),
+                                vertices[1].1.unwrap().normalize(),
                             ],
                             index,
                         )
