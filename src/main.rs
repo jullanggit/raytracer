@@ -140,10 +140,32 @@ impl Ray {
 struct Scene {
     screen: Screen,
     camera: Camera,
-    spheres: BvhNode<Sphere>,
-    planes: BvhNode<Plane>,
-    triangles: BvhNode<Triangle>,
+    bvhs: Bvhs<'static>, // self-referential
+    spheres: Box<[Sphere]>,
+    planes: Box<[Plane]>,
+    triangles: Box<[Triangle]>,
     materials: Vec<Material>,
+}
+
+/// The BVH's for the different shapes
+#[derive(Debug)]
+struct Bvhs<'a> {
+    spheres: BvhNode<'a, Sphere>,
+    planes: BvhNode<'a, Plane>,
+    triangles: BvhNode<'a, Triangle>,
+}
+impl<'a> Bvhs<'a> {
+    fn new(
+        spheres: BvhNode<'a, Sphere>,
+        planes: BvhNode<'a, Plane>,
+        triangles: BvhNode<'a, Triangle>,
+    ) -> Self {
+        Self {
+            spheres,
+            planes,
+            triangles,
+        }
+    }
 }
 
 impl Scene {
@@ -221,10 +243,10 @@ impl Scene {
             return Color([0.; 3]);
         }
 
-        let nearest_intersection = nearest_shape_intersection(&self.spheres, ray)
+        let nearest_intersection = nearest_shape_intersection(&self.bvhs.spheres, ray)
             .into_iter()
-            .chain(nearest_shape_intersection(&self.planes, ray))
-            .chain(nearest_shape_intersection(&self.triangles, ray))
+            .chain(nearest_shape_intersection(&self.bvhs.planes, ray))
+            .chain(nearest_shape_intersection(&self.bvhs.triangles, ray))
             .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
         nearest_intersection.map_or_else(

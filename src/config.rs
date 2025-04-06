@@ -1,8 +1,8 @@
 use std::{fs, str::Split};
 
 use crate::{
-    Camera, Plane, Scene, Screen, Sphere, bvh::BvhNode, material::Material, obj, shapes::Triangle,
-    vec3::Vec3,
+    Bvhs, Camera, Plane, Scene, Screen, Sphere, bvh::BvhNode, material::Material, obj,
+    shapes::Triangle, vec3::Vec3,
 };
 
 pub fn parse() -> Scene {
@@ -87,14 +87,25 @@ pub fn parse() -> Scene {
         }
     }
 
-    Scene {
+    let spheres = spheres.unwrap().into_boxed_slice();
+    let planes = planes.unwrap().into_boxed_slice();
+    let triangles = triangles.unwrap().into_boxed_slice();
+
+    let mut scene = Scene {
         screen: screen.unwrap(),
         camera: camera.unwrap(),
-        spheres: BvhNode::new(spheres.unwrap().into_boxed_slice()),
-        planes: BvhNode::new(planes.unwrap().into_boxed_slice()),
-        triangles: BvhNode::new(triangles.unwrap().into_boxed_slice()),
+        bvhs: Bvhs::new(BvhNode::empty(), BvhNode::empty(), BvhNode::empty()),
+        spheres,
+        planes,
+        triangles,
         materials,
-    }
+    };
+
+    scene.bvhs.spheres.build(&mut scene.spheres);
+    scene.bvhs.planes.build(&mut scene.planes);
+    scene.bvhs.triangles.build(&mut scene.triangles);
+
+    scene
 }
 
 fn push_material_with_values(values: &mut Split<&str>, materials: &mut Vec<Material>) -> u16 {

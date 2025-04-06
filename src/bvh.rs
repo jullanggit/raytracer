@@ -1,35 +1,35 @@
-use std::slice;
+use std::mem;
 
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{Ray, shapes::Shape, vec3::Vec3};
 
 #[derive(Debug)]
-pub struct BvhNode<T: Shape> {
-    kind: BvhNodeKind<T>,
+pub struct BvhNode<'a, T: Shape> {
+    kind: BvhNodeKind<'a, T>,
     // aabb
     min: Vec3,
     max: Vec3,
 }
 
-impl<T: Shape> BvhNode<T> {
-    pub fn new(shapes: Box<[T]>) -> Self {
-        // init root node
-        let mut root = Self {
-            kind: Leaf { shapes },
+impl<'a, T: Shape> BvhNode<'a, T> {
+    pub fn empty() -> Self {
+        Self {
+            kind: Leaf { shapes: &mut [] },
             min: Vec3::splat(f32::INFINITY),
             max: Vec3::splat(f32::NEG_INFINITY),
-        };
+        }
+    }
+    pub fn build(&mut self, shapes: &'a mut [T]) {
+        self.kind = Leaf { shapes };
 
-        root.update_bounds();
+        self.update_bounds();
 
-        root.subdivide();
-
-        root
+        self.subdivide();
     }
     fn update_bounds(&mut self) {
         match self.kind {
             Leaf { ref shapes } => {
-                for shape in shapes {
+                for shape in shapes.iter() {
                     let (min, max) = (shape.min(), shape.max());
 
                     self.min = self.min.min(min);
@@ -53,67 +53,49 @@ impl<T: Shape> BvhNode<T> {
 
         let split = self.min.get(axis) + extent.get(axis) * 0.5;
 
-        match self.kind {
-            Leaf { ref mut shapes } => {
-                let partition_point = shapes
-                    .iter_mut()
-                    .partition_in_place(|shape| shape.centroid().get(axis) > split);
+        // move out kind
+        let kind = mem::replace(&mut self.kind, BvhNodeKind::Leaf { shapes: &mut [] });
 
-                // abort if one side is empty
-                if partition_point == 0 || partition_point == shapes.len() {
-                    return;
-                }
+        if let Leaf { shapes } = kind {
+            let partition_point = shapes
+                .iter_mut()
+                .partition_in_place(|shape| shape.centroid().get(axis) > split);
 
-                // split box
-                let (shapes_a, shapes_b) = {
-                    // take ownership of shapes
-                    let shapes = std::mem::replace(shapes, Box::new([]));
-
-                    let len = shapes.len();
-                    let ptr = Box::into_raw(shapes).cast::<T>();
-
-                    #[expect(clippy::multiple_unsafe_ops_per_block)]
-                    // SAFETY: We correctly calculate the slices and wrap them into Boxes
-                    unsafe {
-                        let a = Box::from_raw(slice::from_raw_parts_mut(ptr, partition_point));
-                        let b = Box::from_raw(slice::from_raw_parts_mut(
-                            ptr.add(partition_point),
-                            len - partition_point,
-                        ));
-
-                        (a, b)
-                    }
-                };
-
-                // whether recursion should continue
-                let recurse_a = shapes_a.len() > 2;
-                let recurse_b = shapes_b.len() > 2;
-
-                let mut child_a = Self {
-                    kind: Leaf { shapes: shapes_a },
-                    min: Vec3::splat(f32::INFINITY),
-                    max: Vec3::splat(f32::NEG_INFINITY),
-                };
-                child_a.update_bounds();
-                if recurse_a {
-                    child_a.subdivide();
-                }
-
-                let mut child_b = Self {
-                    kind: Leaf { shapes: shapes_b },
-                    min: Vec3::splat(f32::INFINITY),
-                    max: Vec3::splat(f32::NEG_INFINITY),
-                };
-                child_b.update_bounds();
-                if recurse_b {
-                    child_b.subdivide();
-                }
-
-                self.kind = Branch {
-                    children: Box::new([child_a, child_b]),
-                };
+            // abort if one side is empty
+            if partition_point == 0 || partition_point == shapes.len() {
+                return;
             }
-            Branch { .. } => unreachable!(),
+
+            // split box
+            let (shapes_a, shapes_b) = shapes.split_at_mut(partition_point);
+
+            // whether recursion should continue
+            let recurse_a = shapes_a.len() > 2;
+            let recurse_b = shapes_b.len() > 2;
+
+            let mut child_a = Self {
+                kind: Leaf { shapes: shapes_a },
+                min: Vec3::splat(f32::INFINITY),
+                max: Vec3::splat(f32::NEG_INFINITY),
+            };
+            child_a.update_bounds();
+            if recurse_a {
+                child_a.subdivide();
+            }
+
+            let mut child_b = Self {
+                kind: Leaf { shapes: shapes_b },
+                min: Vec3::splat(f32::INFINITY),
+                max: Vec3::splat(f32::NEG_INFINITY),
+            };
+            child_b.update_bounds();
+            if recurse_b {
+                child_b.subdivide();
+            }
+
+            self.kind = Branch {
+                children: Box::new([child_a, child_b]),
+            };
         }
     }
     fn intersects(&self, ray: &Ray) -> bool {
@@ -126,7 +108,7 @@ impl<T: Shape> BvhNode<T> {
         tmax >= tmin && tmax > 0.
     }
 
-    pub fn items<'a>(&'a self, ray: &Ray, vec: &mut Vec<&'a [T]>) {
+    pub fn items(&'a self, ray: &Ray, vec: &mut Vec<&'a [T]>) {
         if self.intersects(ray) {
             match self.kind {
                 Branch { ref children } => {
@@ -140,7 +122,7 @@ impl<T: Shape> BvhNode<T> {
 }
 
 #[derive(Debug)]
-enum BvhNodeKind<T: Shape> {
-    Branch { children: Box<[BvhNode<T>; 2]> },
-    Leaf { shapes: Box<[T]> },
+enum BvhNodeKind<'a, T: Shape> {
+    Branch { children: Box<[BvhNode<'a, T>; 2]> },
+    Leaf { shapes: &'a mut [T] },
 }
