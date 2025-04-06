@@ -5,6 +5,7 @@
 #![feature(transmutability)]
 #![feature(portable_simd)]
 #![feature(iter_partition_in_place)]
+#![feature(new_range_api)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
@@ -140,13 +141,64 @@ impl Ray {
 struct Scene {
     screen: Screen,
     camera: Camera,
-    spheres: BvhNode<Sphere>,
-    planes: BvhNode<Plane>,
-    triangles: BvhNode<Triangle>,
+    shapes: Shapes,
+    bvhs: Bvhs,
     materials: Vec<Material>,
 }
 
+#[derive(Debug)]
+struct Shapes {
+    spheres: Box<[Sphere]>,
+    planes: Box<[Plane]>,
+    triangles: Box<[Triangle]>,
+}
+impl Shapes {
+    const fn new(spheres: Box<[Sphere]>, planes: Box<[Plane]>, triangles: Box<[Triangle]>) -> Self {
+        Self {
+            spheres,
+            planes,
+            triangles,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Bvhs {
+    spheres: BvhNode<Sphere>,
+    planes: BvhNode<Plane>,
+    triangles: BvhNode<Triangle>,
+}
+impl Bvhs {
+    const fn new(
+        spheres: BvhNode<Sphere>,
+        planes: BvhNode<Plane>,
+        triangles: BvhNode<Triangle>,
+    ) -> Self {
+        Self {
+            spheres,
+            planes,
+            triangles,
+        }
+    }
+}
+
 impl Scene {
+    const fn new(
+        screen: Screen,
+        camera: Camera,
+        bvhs: Bvhs,
+        shapes: Shapes,
+        materials: Vec<Material>,
+    ) -> Self {
+        Self {
+            screen,
+            camera,
+            shapes,
+            bvhs,
+            materials,
+        }
+    }
+
     // The only precision loss is turning the resolution into floats, which is fine
     #[expect(clippy::cast_precision_loss)]
     fn render(&self) -> Image {
@@ -190,15 +242,17 @@ impl Scene {
         // Helper functions for iterating over the different shapes
         /// Returns the nearest intersection, if any, for the given shape iterator
         fn nearest_shape_intersection<'a, S: Shape + 'a>(
+            shapes: &[S],
             bvh: &BvhNode<S>,
             ray: &Ray,
         ) -> Option<(f32, Vec3, NormalizedVec3, u16)> {
-            let mut items = Vec::new();
-            bvh.items(ray, &mut items);
+            let mut indices = Vec::new();
+            bvh.items(ray, &mut indices);
 
-            items
+            indices
                 .into_iter()
                 .flatten()
+                .map(|index| &shapes[index as usize])
                 .filter_map(|shape| shape.intersects(ray).map(|time| (shape, time)))
                 .filter(|&(_, time)| time > 0.001)
                 .min_by(|&(_, time1), &(_, time2)| {
@@ -221,11 +275,20 @@ impl Scene {
             return Color([0.; 3]);
         }
 
-        let nearest_intersection = nearest_shape_intersection(&self.spheres, ray)
-            .into_iter()
-            .chain(nearest_shape_intersection(&self.planes, ray))
-            .chain(nearest_shape_intersection(&self.triangles, ray))
-            .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
+        let nearest_intersection =
+            nearest_shape_intersection(&self.shapes.spheres, &self.bvhs.spheres, ray)
+                .into_iter()
+                .chain(nearest_shape_intersection(
+                    &self.shapes.planes,
+                    &self.bvhs.planes,
+                    ray,
+                ))
+                .chain(nearest_shape_intersection(
+                    &self.shapes.triangles,
+                    &self.bvhs.triangles,
+                    ray,
+                ))
+                .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
         nearest_intersection.map_or_else(
             || {
