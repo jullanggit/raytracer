@@ -1,0 +1,1 @@
+- Dont zero-initialize image buffer

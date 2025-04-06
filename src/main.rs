@@ -6,6 +6,7 @@
 #![feature(portable_simd)]
 #![feature(iter_partition_in_place)]
 #![feature(new_range_api)]
+#![feature(substr_range)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 
@@ -25,6 +26,7 @@ use std::{
     mem::size_of,
     ops::{Add, Mul},
     slice,
+    thread::{self, available_parallelism},
 };
 
 use bvh::BvhNode;
@@ -46,7 +48,7 @@ struct Image {
 }
 impl Image {
     fn new(width: usize, height: usize) -> Self {
-        let data = Vec::with_capacity(width * height);
+        let data = vec![Color([0; 3]); width * height]; // zero-initialise vec
         Self {
             width,
             height,
@@ -207,35 +209,54 @@ impl Scene {
 
         let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
 
-        // For every (x,y) pixel
-        for y in 0..self.screen.resolution_height {
-            for x in 0..self.screen.resolution_width {
-                // Multiple samples
-                let color = Color(
-                    std::iter::repeat_with(|| {
-                        let pixel_position = self.screen.top_left
-                            + row_step * (x as f32 + rng::f32() / 2.) // Add random variation
-                            + column_step * (y as f32 + rng::f32() / 2.);
+        let pixels = self.screen.resolution_width * self.screen.resolution_height;
 
-                        let ray = Ray::new(
-                            self.camera.position,
-                            (pixel_position - self.camera.position).normalize(),
+        let num_threads: usize = available_parallelism().unwrap().into();
+
+        #[expect(clippy::integer_division)] // we want the implicit floor
+        let work_per_thread = pixels / num_threads;
+
+        thread::scope(|scope| {
+            for (thread_index, pixel_slice) in image.data.chunks_mut(work_per_thread).enumerate() {
+                scope.spawn(move || {
+                    // For every (x,y) pixel
+                    #[expect(clippy::needless_range_loop)] // iterating over indices is faster
+                    for i in 0..pixel_slice.len() {
+                        let offset_i = thread_index * work_per_thread + i; // correct offset
+
+                        let x = offset_i % self.screen.resolution_width;
+                        #[expect(clippy::integer_division)]
+                        let y = offset_i / self.screen.resolution_width;
+
+                        // Multiple samples
+                        let color = Color(
+                            std::iter::repeat_with(|| {
+                                let pixel_position = self.screen.top_left
+                                                + row_step * (x as f32 + rng::f32() / 2.) // Add random variation
+                                                + column_step * (y as f32 + rng::f32() / 2.);
+
+                                let ray = Ray::new(
+                                    self.camera.position,
+                                    (pixel_position - self.camera.position).normalize(),
+                                );
+
+                                self.ray_color(&ray, self.screen.max_bounces, &self.materials)
+                            })
+                            .take(self.screen.samples_per_pixel)
+                            .reduce(|acc, element| {
+                                Color(array::from_fn(|index| acc.0[index] + element.0[index]))
+                            })
+                            .unwrap_or_default()
+                            .0
+                            .map(|e| e / self.screen.samples_per_pixel as f32),
                         );
 
-                        self.ray_color(&ray, self.screen.max_bounces, &self.materials) // TODO: dont hardcode max_depth
-                    })
-                    .take(self.screen.samples_per_pixel)
-                    .reduce(|acc, element| {
-                        Color(array::from_fn(|index| acc.0[index] + element.0[index]))
-                    })
-                    .unwrap_or_default()
-                    .0
-                    .map(|e| e / self.screen.samples_per_pixel as f32),
-                );
-
-                image.data.push(color.into());
+                        pixel_slice[i] = color.into();
+                    }
+                });
             }
-        }
+        });
+
         image
     }
     fn ray_color(&self, ray: &Ray, remaining_depth: usize, materials: &[Material]) -> Color<f32> {
