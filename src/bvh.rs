@@ -59,30 +59,37 @@ impl<T: Shape> BvhNode<T> {
 
         match self.kind {
             Leaf { shapes_range } => {
-                let partition_point = shapes
-                    .iter_mut()
-                    .partition_in_place(|shape| shape.centroid().get(axis) > split)
-                    .try_into()
-                    .unwrap();
-
-                // abort if one side is empty
-                if partition_point == 0 || partition_point == shapes.len().try_into().unwrap() {
-                    return;
-                }
+                let partition_point = u32::try_from(
+                    shapes[shapes_range.start as usize..shapes_range.end as usize]
+                        .iter_mut()
+                        .partition_in_place(|shape| shape.centroid().get(axis) > split),
+                )
+                .unwrap()
+                    + shapes_range.start;
 
                 // split box
                 let child_ranges = [
                     shapes_range.start..partition_point,
-                    shapes_range.start + partition_point..shapes_range.end,
-                ];
+                    partition_point..shapes_range.end,
+                ]
+                .map(Range::from);
+
+                // assert valid ranges
+                for child_range in &child_ranges {
+                    debug_assert!(
+                        child_range.start <= child_range.end,
+                        "parent_range: {shapes_range:?}, partition_point: {partition_point:?} child-ranges: {child_ranges:?}"
+                    );
+                }
 
                 // whether recursion should continue
-                let recurse = child_ranges.clone().map(|range| range.len() > 2);
+                let recurse =
+                    child_ranges.map(|range| range.end - range.start > 2 && range != shapes_range);
 
                 let children = array::from_fn(|index| {
                     let mut child = Self {
                         kind: Leaf {
-                            shapes_range: child_ranges[index].clone().into(),
+                            shapes_range: child_ranges[index],
                         },
                         min: Vec3::splat(f32::INFINITY),
                         max: Vec3::splat(f32::NEG_INFINITY),
