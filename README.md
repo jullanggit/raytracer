@@ -3,6 +3,7 @@ A zero-dependency WIP raytracer, following https://matklad.github.io/2022/12/31/
 ## Features
 - Spheres, Planes & Triangles
 - Obj file loading
+- Vertex normals for smooth surfaces
 - Lambertain, Metal & Glass materials
 - Custom scene description
 - Bounding Volume Hierarchies
