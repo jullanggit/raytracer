@@ -95,9 +95,9 @@ pub fn parse() -> Scene {
         screen.unwrap(),
         camera.unwrap(),
         Bvhs::new(
-            BvhNode::new(&mut spheres),
-            BvhNode::new(&mut planes),
-            BvhNode::new(&mut triangles),
+            BvhNode::new(&mut spheres).into_boxed_slice(),
+            BvhNode::new(&mut planes).into_boxed_slice(),
+            BvhNode::new(&mut triangles).into_boxed_slice(),
         ),
         Shapes::new(spheres, planes, triangles),
         materials,

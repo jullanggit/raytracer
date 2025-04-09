@@ -5,6 +5,9 @@ use crate::{
     vec3::{NormalizedVec3, Vec3},
 };
 
+/// The min distance an intersection has to have for it to count
+const MIN_DISTANCE: f32 = 0.001;
+
 pub trait Intersects {
     /// The time at which the ray intersects the object
     fn intersects(&self, ray: &Ray) -> Option<f32>;
@@ -59,14 +62,14 @@ impl Intersects for Sphere {
         // If t1 is positive (in front of the origin), return it, as
         // t1 is always closer than t2, because we subtract,
         // instead of add the discriminant (which is always positive)
-        if t1 > f32::EPSILON {
+        if t1 > MIN_DISTANCE {
             Some(t1)
         } else {
             // The second intersection point
             let t2 = -delta_origin_direction + discriminant.sqrt();
 
             // If t2 is positive, return it, else None
-            (t2 > f32::EPSILON).then_some(t2)
+            (t2 > MIN_DISTANCE).then_some(t2)
         }
     }
 }
@@ -122,7 +125,7 @@ impl Intersects for Plane {
         let t = -(numerator / denominator);
 
         // Ensure intersection is in front of ray origin
-        (t > f32::EPSILON).then_some(t)
+        (t > MIN_DISTANCE).then_some(t)
     }
 }
 impl Shape for Plane {
@@ -241,7 +244,7 @@ impl Intersects for Triangle {
         let t = inv_det * self.e2.dot(s_cross_e1);
 
         // Ensure intersection is in front of ray origin
-        (t > TOLERANCE).then_some(t)
+        (t > MIN_DISTANCE).then_some(t)
     }
 }
 impl Shape for Triangle {

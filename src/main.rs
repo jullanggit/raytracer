@@ -166,15 +166,17 @@ impl Shapes {
 
 #[derive(Debug)]
 struct Bvhs {
-    spheres: BvhNode<Sphere>,
-    planes: BvhNode<Plane>,
-    triangles: BvhNode<Triangle>,
+    spheres: Self::Wrapper<Sphere>,
+    planes: Self::Wrapper<Plane>,
+    triangles: Self::Wrapper<Triangle>,
 }
 impl Bvhs {
-    const fn new(
-        spheres: BvhNode<Sphere>,
-        planes: BvhNode<Plane>,
-        triangles: BvhNode<Triangle>,
+    type Wrapper<T>: Box<[BvhNode<T>]>;
+
+    fn new(
+        spheres: Self::Wrapper<Sphere>,
+        planes: Self::Wrapper<Plane>,
+        triangles: Self::Wrapper<Triangle>,
     ) -> Self {
         Self {
             spheres,
@@ -219,6 +221,8 @@ impl Scene {
         thread::scope(|scope| {
             for (thread_index, pixel_slice) in image.data.chunks_mut(work_per_thread).enumerate() {
                 scope.spawn(move || {
+                    let mut bvh_stack = Vec::new();
+
                     // For every (x,y) pixel
                     #[expect(clippy::needless_range_loop)] // iterating over indices is faster
                     for i in 0..pixel_slice.len() {
@@ -240,7 +244,12 @@ impl Scene {
                                     (pixel_position - self.camera.position).normalize(),
                                 );
 
-                                self.ray_color(&ray, self.screen.max_bounces, &self.materials)
+                                self.ray_color(
+                                    &ray,
+                                    self.screen.max_bounces,
+                                    &self.materials,
+                                    &mut bvh_stack,
+                                )
                             })
                             .take(self.screen.samples_per_pixel)
                             .reduce(|acc, element| {
@@ -259,57 +268,33 @@ impl Scene {
 
         image
     }
-    fn ray_color(&self, ray: &Ray, remaining_depth: usize, materials: &[Material]) -> Color<f32> {
-        // Helper functions for iterating over the different shapes
-        /// Returns the nearest intersection, if any, for the given shape iterator
-        fn nearest_shape_intersection<'a, S: Shape + 'a>(
-            shapes: &[S],
-            bvh: &BvhNode<S>,
-            ray: &Ray,
-        ) -> Option<(f32, Vec3, NormalizedVec3, u16)> {
-            let mut indices = Vec::new();
-            bvh.items(ray, &mut indices);
-
-            indices
-                .into_iter()
-                .flatten()
-                .map(|index| &shapes[index as usize])
-                .filter_map(|shape| shape.intersects(ray).map(|time| (shape, time)))
-                .filter(|&(_, time)| time > 0.001)
-                .min_by(|&(_, time1), &(_, time2)| {
-                    time1
-                        .partial_cmp(&time2)
-                        .expect("Ordering between times should exist")
-                })
-                .map(|(shape, time)| {
-                    let hit_point = ray.origin + *ray.direction.inner() * time;
-
-                    (
-                        time,
-                        hit_point,
-                        shape.normal(&hit_point),
-                        shape.material_index(),
-                    )
-                })
-        }
+    fn ray_color(
+        &self,
+        ray: &Ray,
+        remaining_depth: usize,
+        materials: &[Material],
+        bvh_stack: &mut Vec<&BvhNode<Sphere>>, // is reused across shape types
+    ) -> Color<f32> {
         if remaining_depth == 0 {
             return Color([0.; 3]);
         }
 
-        let nearest_intersection =
-            nearest_shape_intersection(&self.shapes.spheres, &self.bvhs.spheres, ray)
-                .into_iter()
-                .chain(nearest_shape_intersection(
-                    &self.shapes.planes,
-                    &self.bvhs.planes,
-                    ray,
-                ))
-                .chain(nearest_shape_intersection(
-                    &self.shapes.triangles,
-                    &self.bvhs.triangles,
-                    ray,
-                ))
-                .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
+        let nearest_intersection = self
+            .bvhs
+            .spheres
+            .closest_shape(ray, &self.shapes.spheres, bvh_stack)
+            .into_iter()
+            .chain(
+                self.bvhs
+                    .planes
+                    .closest_shape(ray, &self.shapes.planes, bvh_stack),
+            )
+            .chain(
+                self.bvhs
+                    .triangles
+                    .closest_shape(ray, &self.shapes.triangles, bvh_stack),
+            )
+            .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
         nearest_intersection.map_or_else(
             || {
@@ -323,7 +308,8 @@ impl Scene {
                 match shape_material.scatter(ray, normal, hit_point) {
                     Scatter::Scattered(ray, attenuation) => {
                         // calculate color of scattered ray and mix it with the current color
-                        attenuation * self.ray_color(&ray, remaining_depth - 1, materials) // TODO: see if just multiplying the colors is right
+                        attenuation
+                            * self.ray_color(&ray, remaining_depth - 1, materials, bvh_stack) // TODO: see if just multiplying the colors is right
                     }
                     Scatter::Absorbed => Color([0.; 3]),
                     Scatter::Light(color) => color,
