@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, range::Range};
+use std::{array, marker::PhantomData, range::Range};
 
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
@@ -102,10 +102,10 @@ impl<T: Shape> BvhNode<T> {
                 let recurse =
                     child_ranges.map(|range| range.end - range.start > 2 && range != shapes_range);
 
-                for index in 0..2 {
+                let children = array::from_fn(|child_range_index| {
                     let mut child = Self {
                         kind: Leaf {
-                            shapes_range: child_ranges[index],
+                            shapes_range: child_ranges[child_range_index],
                         },
                         min: Vec3::splat(f32::INFINITY),
                         max: Vec3::splat(f32::NEG_INFINITY),
@@ -117,15 +117,14 @@ impl<T: Shape> BvhNode<T> {
 
                     nodes.push(child);
 
-                    if recurse[index] {
+                    if recurse[child_range_index] {
                         Self::subdivide(child_index, shapes, nodes);
                     }
-                }
 
-                nodes[index].kind = Branch {
-                    children: [nodes.len() - 2, nodes.len() - 1]
-                        .map(|index| index.try_into().unwrap()),
-                };
+                    child_index.try_into().unwrap()
+                });
+
+                nodes[index].kind = Branch { children };
             }
             Branch { .. } => unreachable!(),
         }
@@ -190,7 +189,7 @@ impl<T: Shape> BvhNode<T> {
                                     stack.push(children[1]);
                                 }
                             } else {
-                                stack.push(children[0]);
+                                stack.push(children[1]);
                             }
                         }
                         (None, None) => {}
