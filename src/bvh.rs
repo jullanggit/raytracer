@@ -1,4 +1,4 @@
-use std::{array, marker::PhantomData, range::Range};
+use std::{marker::PhantomData, range::Range};
 
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct BvhNode<T: Shape> {
-    kind: BvhNodeKind<T>,
+    kind: BvhNodeKind,
     // aabb
     min: Vec3,
     max: Vec3,
@@ -42,7 +42,7 @@ impl<T: Shape> BvhNode<T> {
 
         nodes[0].update_bounds(shapes);
 
-        nodes[0].subdivide(shapes, &mut nodes);
+        Self::subdivide(0, shapes, &mut nodes);
 
         nodes
     }
@@ -59,8 +59,8 @@ impl<T: Shape> BvhNode<T> {
             Branch { .. } => unreachable!(),
         }
     }
-    fn subdivide(&mut self, shapes: &mut [T], nodes: &mut Vec<Self>) {
-        let extent = self.max - self.min;
+    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>) {
+        let extent = nodes[index].max - nodes[index].min;
 
         // get the longest axis
         let axis = {
@@ -71,9 +71,9 @@ impl<T: Shape> BvhNode<T> {
             axis
         };
 
-        let split = self.min.get(axis) + extent.get(axis) * 0.5;
+        let split = nodes[index].min.get(axis) + extent.get(axis) * 0.5;
 
-        match self.kind {
+        match nodes[index].kind {
             Leaf { shapes_range } => {
                 let partition_point = u32::try_from(
                     shapes[shapes_range.start as usize..shapes_range.end as usize]
@@ -111,15 +111,18 @@ impl<T: Shape> BvhNode<T> {
                         max: Vec3::splat(f32::NEG_INFINITY),
                         _type: PhantomData,
                     };
+                    child.update_bounds(shapes);
+
+                    let child_index = nodes.len();
+
                     nodes.push(child);
 
-                    child.update_bounds(shapes);
                     if recurse[index] {
-                        child.subdivide(shapes, nodes);
+                        Self::subdivide(child_index, shapes, nodes);
                     }
                 }
 
-                self.kind = Branch {
+                nodes[index].kind = Branch {
                     children: [nodes.len() - 2, nodes.len() - 1]
                         .map(|index| index.try_into().unwrap()),
                 };
@@ -129,7 +132,6 @@ impl<T: Shape> BvhNode<T> {
     }
     /// Returns the closest shape that intersects with the ray, alongside the distance
     pub fn closest_shape(
-        &self,
         ray: &Ray,
         shapes: &[T],
         nodes: &[Self],
@@ -161,41 +163,36 @@ impl<T: Shape> BvhNode<T> {
                                     ((children[1], t1), (children[0], t0))
                                 };
 
-                            match closest {
-                                Some((_, closest)) => {
-                                    if further_value <= closest {
-                                        stack.push(further_child);
-                                    }
-                                    if closer_value <= closest {
-                                        stack.push(closer_child);
-                                    }
-                                }
-                                None => {
+                            if let Some((_, closest)) = closest {
+                                if further_value <= closest {
                                     stack.push(further_child);
+                                }
+                                if closer_value <= closest {
                                     stack.push(closer_child);
                                 }
+                            } else {
+                                stack.push(further_child);
+                                stack.push(closer_child);
                             }
                         }
-                        (Some(time), None) => match closest {
-                            Some((_, closest)) => {
+                        (Some(time), None) => {
+                            if let Some((_, closest)) = closest {
                                 if time <= closest {
                                     stack.push(children[0]);
                                 }
-                            }
-                            None => {
+                            } else {
                                 stack.push(children[0]);
                             }
-                        },
-                        (None, Some(time)) => match closest {
-                            Some((_, closest)) => {
+                        }
+                        (None, Some(time)) => {
+                            if let Some((_, closest)) = closest {
                                 if time <= closest {
                                     stack.push(children[1]);
                                 }
-                            }
-                            None => {
+                            } else {
                                 stack.push(children[0]);
                             }
-                        },
+                        }
                         (None, None) => {}
                     }
                 }
@@ -205,12 +202,12 @@ impl<T: Shape> BvhNode<T> {
 
                         // update if new intersection is closer
                         match (closest, intersection) {
-                            // first intersection
-                            (None, Some(time)) => closest = Some((index, time)),
                             // new intersection is closer
                             (Some((_, closest_time)), Some(time)) if time < closest_time => {
                                 closest = Some((index, time));
                             }
+                            // first intersection
+                            (None, Some(time)) => closest = Some((index, time)),
                             _ => {}
                         }
                     }
@@ -232,7 +229,7 @@ impl<T: Shape> BvhNode<T> {
 }
 
 #[derive(Debug)]
-enum BvhNodeKind<T: Shape> {
+enum BvhNodeKind {
     Branch { children: [u16; 2] },
     Leaf { shapes_range: Range<u32> },
 }

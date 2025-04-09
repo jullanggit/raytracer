@@ -31,7 +31,7 @@ use std::{
 
 use bvh::BvhNode;
 use material::{Material, Scatter};
-use shapes::{Shape, Triangle};
+use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3};
 
 fn main() {
@@ -164,19 +164,19 @@ impl Shapes {
     }
 }
 
+type BvhWrapper<T> = Box<[BvhNode<T>]>;
+
 #[derive(Debug)]
 struct Bvhs {
-    spheres: Self::Wrapper<Sphere>,
-    planes: Self::Wrapper<Plane>,
-    triangles: Self::Wrapper<Triangle>,
+    spheres: BvhWrapper<Sphere>,
+    planes: BvhWrapper<Plane>,
+    triangles: BvhWrapper<Triangle>,
 }
 impl Bvhs {
-    type Wrapper<T>: Box<[BvhNode<T>]>;
-
-    fn new(
-        spheres: Self::Wrapper<Sphere>,
-        planes: Self::Wrapper<Plane>,
-        triangles: Self::Wrapper<Triangle>,
+    const fn new(
+        spheres: BvhWrapper<Sphere>,
+        planes: BvhWrapper<Plane>,
+        triangles: BvhWrapper<Triangle>,
     ) -> Self {
         Self {
             spheres,
@@ -273,28 +273,28 @@ impl Scene {
         ray: &Ray,
         remaining_depth: usize,
         materials: &[Material],
-        bvh_stack: &mut Vec<&BvhNode<Sphere>>, // is reused across shape types
+        bvh_stack: &mut Vec<u16>, // is reused across shape types
     ) -> Color<f32> {
         if remaining_depth == 0 {
             return Color([0.; 3]);
         }
 
-        let nearest_intersection = self
-            .bvhs
-            .spheres
-            .closest_shape(ray, &self.shapes.spheres, bvh_stack)
-            .into_iter()
-            .chain(
-                self.bvhs
-                    .planes
-                    .closest_shape(ray, &self.shapes.planes, bvh_stack),
-            )
-            .chain(
-                self.bvhs
-                    .triangles
-                    .closest_shape(ray, &self.shapes.triangles, bvh_stack),
-            )
-            .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
+        let nearest_intersection =
+            BvhNode::closest_shape(ray, &self.shapes.spheres, &self.bvhs.spheres, bvh_stack)
+                .into_iter()
+                .chain(BvhNode::closest_shape(
+                    ray,
+                    &self.shapes.planes,
+                    &self.bvhs.planes,
+                    bvh_stack,
+                ))
+                .chain(BvhNode::closest_shape(
+                    ray,
+                    &self.shapes.triangles,
+                    &self.bvhs.triangles,
+                    bvh_stack,
+                ))
+                .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
         nearest_intersection.map_or_else(
             || {
