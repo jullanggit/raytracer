@@ -1,4 +1,4 @@
-use std::{array, marker::PhantomData, range::Range};
+use std::{array, cmp::Ordering, collections::BinaryHeap, marker::PhantomData, range::Range};
 
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
@@ -134,18 +134,18 @@ impl<T: Shape> BvhNode<T> {
         ray: &Ray,
         shapes: &[T],
         nodes: &[Self],
-        stack: &mut Vec<u16>,
+        heap: &mut BinaryHeap<HeapEntry>,
     ) -> Option<(f32, Vec3, NormalizedVec3, u16)> {
-        stack.clear();
+        heap.clear();
 
         // stack is ordered from far to near
-        stack.push(0);
+        heap.push(HeapEntry::new(0., 0));
 
         let mut closest = None; // (index, time)
 
         // we always push the closest child last, so node is always the closest node
-        while let Some(node_index) = stack.pop() {
-            let node = &nodes[node_index as usize];
+        while let Some(entry) = heap.pop() {
+            let node = &nodes[entry.node_index as usize];
 
             match node.kind {
                 Branch { ref children } => {
@@ -155,41 +155,34 @@ impl<T: Shape> BvhNode<T> {
                         nodes[children[1] as usize].intersects(ray),
                     ) {
                         (Some(t0), Some(t1)) => {
-                            let ((closer_child, closer_value), (further_child, further_value)) =
-                                if t0 <= t1 {
-                                    ((children[0], t0), (children[1], t1))
-                                } else {
-                                    ((children[1], t1), (children[0], t0))
-                                };
-
                             if let Some((_, closest)) = closest {
-                                if further_value <= closest {
-                                    stack.push(further_child);
+                                if t0 <= closest {
+                                    heap.push(HeapEntry::new(t0, children[0]));
                                 }
-                                if closer_value <= closest {
-                                    stack.push(closer_child);
+                                if t1 <= closest {
+                                    heap.push(HeapEntry::new(t1, children[1]));
                                 }
                             } else {
-                                stack.push(further_child);
-                                stack.push(closer_child);
+                                heap.push(HeapEntry::new(t0, children[0]));
+                                heap.push(HeapEntry::new(t1, children[1]));
                             }
                         }
                         (Some(time), None) => {
                             if let Some((_, closest)) = closest {
                                 if time <= closest {
-                                    stack.push(children[0]);
+                                    heap.push(HeapEntry::new(time, children[0]));
                                 }
                             } else {
-                                stack.push(children[0]);
+                                heap.push(HeapEntry::new(time, children[0]));
                             }
                         }
                         (None, Some(time)) => {
                             if let Some((_, closest)) = closest {
                                 if time <= closest {
-                                    stack.push(children[1]);
+                                    heap.push(HeapEntry::new(time, children[1]));
                                 }
                             } else {
-                                stack.push(children[1]);
+                                heap.push(HeapEntry::new(time, children[1]));
                             }
                         }
                         (None, None) => {}
@@ -231,4 +224,32 @@ impl<T: Shape> BvhNode<T> {
 enum BvhNodeKind {
     Branch { children: [u16; 2] },
     Leaf { shapes_range: Range<u32> },
+}
+
+#[derive(PartialEq)]
+pub struct HeapEntry {
+    tmin: f32,
+    node_index: u16,
+}
+
+impl HeapEntry {
+    const fn new(tmin: f32, node_index: u16) -> Self {
+        Self { tmin, node_index }
+    }
+}
+
+impl Eq for HeapEntry {}
+
+#[expect(clippy::non_canonical_partial_ord_impl)]
+impl PartialOrd for HeapEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        // Reverse the ordering so that a smaller tmin is considered "greater"
+        other.tmin.partial_cmp(&self.tmin)
+    }
+}
+
+impl Ord for HeapEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }
