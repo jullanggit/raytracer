@@ -206,18 +206,18 @@ impl<T: Shape> BvhNode<T> {
 
 #[derive(Debug)]
 enum BvhNodeKind {
-    Branch { children: [u16; 2] },
+    Branch { children: [u32; 2] },
     Leaf { shapes_range: Range<u32> },
 }
 
 #[derive(PartialEq)]
 pub struct HeapEntry {
     tmin: f32,
-    node_index: u16,
+    node_index: u32,
 }
 
 impl HeapEntry {
-    const fn new(tmin: f32, node_index: u16) -> Self {
+    const fn new(tmin: f32, node_index: u32) -> Self {
         Self { tmin, node_index }
     }
 }

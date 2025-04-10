@@ -1,0 +1,38 @@
+# Blender 4.4.0 MTL File: 'island_tree_02_1k.blend'
+# www.blender.org
+
+newmtl island_tree_02
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+# remove this when textures are supported
+Kd 0.396 0.263 0.129
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/island_tree_02_diff_1k.jpg
+map_Ns textures/island_tree_02_rough_1k.exr
+map_Bump -bm 1.000000 textures/island_tree_02_nor_gl_1k.exr
+
+newmtl island_tree_02_branches
+Ka 1.000000 1.000000 1.000000
+Ks 0.205000 0.205000 0.205000
+Ke 0.000000 0.000000 0.000000
+# remove this when textures are supported
+Kd 0.396 0.263 0.129
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd textures/island_tree_02_branches_diff_1k.png
+map_Ns textures/island_tree_02_branches_rough_1k.png
+map_Bump -bm 0.500000 textures/island_tree_02_branches_nor_gl_1k.png
+
+newmtl island_tree_02_leaves
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.464639 0.800000 0.187849
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2

@@ -9,13 +9,15 @@ use crate::{
 };
 
 pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
-    let string = fs::read_to_string(path).unwrap();
+    let string = fs::read_to_string(path).expect("Failed to reead obj file");
     let lines = string.lines();
 
     let material_file = lines
         .clone()
         .find(|line| line.starts_with("mtllib"))
-        .map(|line| fs::read_to_string(format!("obj/{}", &line[7..])).unwrap());
+        .map(|line| {
+            fs::read_to_string(format!("obj/{}", &line[7..])).expect("Failed to read mtl file")
+        });
 
     let name_index = parse_materials(materials, material_file.as_deref());
 
@@ -113,8 +115,7 @@ fn parse_materials<'a>(
 
             let diffuse_color = lines
                 .find(|line| line.starts_with("Kd"))
-                .map(|line| Color::from(&line[3..]))
-                .unwrap();
+                .map_or(Color([0.5; 3]), |line| Color::from(&line[3..]));
 
             let material = Material::new(MaterialKind::Lambertian, diffuse_color);
 

@@ -1,6 +1,6 @@
-screen(-1.5 2 17, 2.5 0 0, 0 -4 0, 1250, 2000, 50, 30)
+screen(-1 1 10, 2 0 0, 0 -2 0, 2000, 2000, 30, 30)
 camera(0 -2 20)
 spheres()
 planes()
-obj((LowPolyTree))
+obj((island_tree_02_1k))
 triangles()
