@@ -147,11 +147,11 @@ impl<T: Shape> BvhNode<T> {
         while let Some(entry) = heap.pop() {
             let node = &nodes[entry.node_index as usize];
 
-            // skip node if it isnt closer than closest
+            // break if node isnt closer than closest
             if let Some((_, closest)) = closest
                 && closest <= entry.tmin
             {
-                continue;
+                break;
             }
 
             match node.kind {
