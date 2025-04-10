@@ -147,45 +147,29 @@ impl<T: Shape> BvhNode<T> {
         while let Some(entry) = heap.pop() {
             let node = &nodes[entry.node_index as usize];
 
+            // skip node if it isnt closer than closest
+            if let Some((_, closest)) = closest
+                && closest <= entry.tmin
+            {
+                continue;
+            }
+
             match node.kind {
-                Branch { ref children } => {
-                    // push the closer child second. Only push if the child's min is closer than closest
-                    match (
-                        nodes[children[0] as usize].intersects(ray),
-                        nodes[children[1] as usize].intersects(ray),
-                    ) {
-                        (Some(t0), Some(t1)) => {
+                Branch { children } => {
+                    for child_node_index in children {
+                        let child = &nodes[child_node_index as usize];
+
+                        if let Some(intersection) = child.intersects(ray) {
+                            // push if intersection is closer than closest
                             if let Some((_, closest)) = closest {
-                                if t0 <= closest {
-                                    heap.push(HeapEntry::new(t0, children[0]));
+                                if intersection < closest {
+                                    heap.push(HeapEntry::new(intersection, child_node_index));
                                 }
-                                if t1 <= closest {
-                                    heap.push(HeapEntry::new(t1, children[1]));
-                                }
+                                // or closest is not yet initialized
                             } else {
-                                heap.push(HeapEntry::new(t0, children[0]));
-                                heap.push(HeapEntry::new(t1, children[1]));
+                                heap.push(HeapEntry::new(intersection, child_node_index));
                             }
                         }
-                        (Some(time), None) => {
-                            if let Some((_, closest)) = closest {
-                                if time <= closest {
-                                    heap.push(HeapEntry::new(time, children[0]));
-                                }
-                            } else {
-                                heap.push(HeapEntry::new(time, children[0]));
-                            }
-                        }
-                        (None, Some(time)) => {
-                            if let Some((_, closest)) = closest {
-                                if time <= closest {
-                                    heap.push(HeapEntry::new(time, children[1]));
-                                }
-                            } else {
-                                heap.push(HeapEntry::new(time, children[1]));
-                            }
-                        }
-                        (None, None) => {}
                     }
                 }
                 Leaf { shapes_range } => {
