@@ -27,6 +27,7 @@ use std::{
     mem::size_of,
     ops::{Add, Mul},
     slice,
+    sync::Mutex,
     thread::{self, available_parallelism},
 };
 
@@ -212,56 +213,65 @@ impl Scene {
 
         let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
 
-        let pixels = self.screen.resolution_width * self.screen.resolution_height;
-
         let num_threads: usize = available_parallelism().unwrap().into();
 
-        #[expect(clippy::integer_division)] // we want the implicit floor
-        let work_per_thread = pixels / num_threads;
+        let chunk_size = (self.screen.resolution_width * self.screen.resolution_height)
+            / (num_threads * num_threads);
+
+        let chunks = Mutex::new(image.data.chunks_mut(chunk_size).enumerate());
 
         thread::scope(|scope| {
-            for (thread_index, pixel_slice) in image.data.chunks_mut(work_per_thread).enumerate() {
-                scope.spawn(move || {
+            for _ in 0..num_threads {
+                scope.spawn(|| {
                     let mut bvh_heap = BinaryHeap::new();
 
-                    // For every (x,y) pixel
-                    #[expect(clippy::needless_range_loop)] // iterating over indices is faster
-                    for i in 0..pixel_slice.len() {
-                        let offset_i = thread_index * work_per_thread + i; // correct offset
+                    loop {
+                        let mut next = chunks.lock().unwrap().next();
 
-                        let x = offset_i % self.screen.resolution_width;
-                        #[expect(clippy::integer_division)]
-                        let y = offset_i / self.screen.resolution_width;
+                        if let Some((chunk_index, ref mut chunk)) = next {
+                            // For every (x,y) pixel
+                            for i in 0..chunk.len() {
+                                let offset_i = chunk_index * chunk_size + i; // correct offset
 
-                        // Multiple samples
-                        let color = Color(
-                            std::iter::repeat_with(|| {
-                                let pixel_position = self.screen.top_left
+                                let x = offset_i % self.screen.resolution_width;
+                                #[expect(clippy::integer_division)]
+                                let y = offset_i / self.screen.resolution_width;
+
+                                // Multiple samples
+                                let color = Color(
+                                    std::iter::repeat_with(|| {
+                                        let pixel_position = self.screen.top_left
                                                 + row_step * (x as f32 + rng::f32() / 2.) // Add random variation
                                                 + column_step * (y as f32 + rng::f32() / 2.);
 
-                                let ray = Ray::new(
-                                    self.camera.position,
-                                    (pixel_position - self.camera.position).normalize(),
+                                        let ray = Ray::new(
+                                            self.camera.position,
+                                            (pixel_position - self.camera.position).normalize(),
+                                        );
+
+                                        self.ray_color(
+                                            &ray,
+                                            self.screen.max_bounces,
+                                            &self.materials,
+                                            &mut bvh_heap,
+                                        )
+                                    })
+                                    .take(self.screen.samples_per_pixel)
+                                    .reduce(|acc, element| {
+                                        Color(array::from_fn(|index| {
+                                            acc.0[index] + element.0[index]
+                                        }))
+                                    })
+                                    .unwrap_or_default()
+                                    .0
+                                    .map(|e| e / self.screen.samples_per_pixel as f32),
                                 );
 
-                                self.ray_color(
-                                    &ray,
-                                    self.screen.max_bounces,
-                                    &self.materials,
-                                    &mut bvh_heap,
-                                )
-                            })
-                            .take(self.screen.samples_per_pixel)
-                            .reduce(|acc, element| {
-                                Color(array::from_fn(|index| acc.0[index] + element.0[index]))
-                            })
-                            .unwrap_or_default()
-                            .0
-                            .map(|e| e / self.screen.samples_per_pixel as f32),
-                        );
-
-                        pixel_slice[i] = color.into();
+                                chunk[i] = color.into();
+                            }
+                        } else {
+                            break;
+                        }
                     }
                 });
             }
