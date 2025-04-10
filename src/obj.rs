@@ -8,6 +8,7 @@ use crate::{
     vec3::Vec3,
 };
 
+#[inline(always)]
 pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
     let string = fs::read_to_string(path).expect("Failed to reead obj file");
     let lines = string.lines();

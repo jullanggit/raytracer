@@ -17,6 +17,7 @@ pub struct BvhNode<T: Shape> {
 }
 
 impl<T: Shape> Intersects for BvhNode<T> {
+    #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let t1 = (self.min - ray.origin) / *ray.direction.inner();
         let t2 = (self.max - ray.origin) / *ray.direction.inner();
@@ -29,6 +30,7 @@ impl<T: Shape> Intersects for BvhNode<T> {
 }
 
 impl<T: Shape> BvhNode<T> {
+    #[inline(always)]
     pub fn new(shapes: &mut [T]) -> Vec<Self> {
         // init root node
         let mut nodes = vec![Self {
@@ -130,6 +132,7 @@ impl<T: Shape> BvhNode<T> {
         }
     }
     /// Returns the closest shape that intersects with the ray, alongside the distance
+    #[inline(always)]
     pub fn closest_shape(
         ray: &Ray,
         shapes: &[T],

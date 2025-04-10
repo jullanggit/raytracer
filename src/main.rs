@@ -279,6 +279,8 @@ impl Scene {
 
         image
     }
+
+    #[inline(always)]
     fn ray_color(
         &self,
         ray: &Ray,

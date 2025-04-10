@@ -44,6 +44,7 @@ impl Sphere {
 }
 impl Intersects for Sphere {
     // See `ray_sphere_intersection_derivation.latex` for the formula used here
+    #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let delta_origin = ray.origin - self.center;
 
@@ -113,6 +114,7 @@ impl Plane {
 }
 
 impl Intersects for Plane {
+    #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let denominator = self.normal.inner().dot(*ray.direction.inner());
 
@@ -218,6 +220,7 @@ impl Triangle {
 }
 impl Intersects for Triangle {
     // Möller-Trumbore intersection algorithm
+    #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         // Using f32::EPSILON causes some slight edge misalignments (coming from the naive triangulation) to become visible
         const TOLERANCE: f32 = 2e-6;
@@ -248,6 +251,7 @@ impl Intersects for Triangle {
     }
 }
 impl Shape for Triangle {
+    #[inline(always)]
     fn normal(&self, point: &Vec3) -> NormalizedVec3 {
         if self.different_normals {
             let barycentric_coordinates = self.barycentric_coordinates(point);
