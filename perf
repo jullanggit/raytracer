@@ -1,0 +1,4 @@
+36.71% BvhNode::intersects()
+34.43% Triangle::intersects()
+25.77% BvhNode::closest_shape()
+1.2% Scene::ray_color()

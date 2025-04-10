@@ -10,7 +10,7 @@ use crate::{
 
 #[inline(always)]
 pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
-    let string = fs::read_to_string(path).expect("Failed to reead obj file");
+    let string = fs::read_to_string(path).expect("Failed to read obj file");
     let lines = string.lines();
 
     let material_file = lines

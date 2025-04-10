@@ -215,6 +215,7 @@ impl Scene {
 
         let num_threads: usize = available_parallelism().unwrap().into();
 
+        #[expect(clippy::integer_division)]
         let chunk_size = (self.screen.resolution_width * self.screen.resolution_height)
             / (num_threads * num_threads);
 

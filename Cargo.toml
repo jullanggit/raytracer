@@ -13,6 +13,7 @@ pedantic = "warn"
 
 derive_partial_eq_without_eq = { level = "allow", priority = 1 } # Dont always want eq on enums
 cargo_common_metadata = { level = "allow", priority = 1 }
+inline_always = { level = "allow", priority = 1 }
 
 # expect_used = "warn"
 
