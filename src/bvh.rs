@@ -32,48 +32,84 @@ impl<T: Shape> Intersects for BvhNode<T> {
 impl<T: Shape> BvhNode<T> {
     #[inline(always)]
     pub fn new(shapes: &mut [T]) -> Vec<Self> {
+        let shapes_range = Range::from(0..shapes.len().try_into().unwrap());
+        let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
+
         // init root node
         let mut nodes = vec![Self {
-            kind: Leaf {
-                shapes_range: Range::from(0..shapes.len().try_into().unwrap()),
-            },
-            min: Vec3::splat(f32::INFINITY),
-            max: Vec3::splat(f32::NEG_INFINITY),
+            kind: Leaf { shapes_range },
+            min,
+            max,
             _type: PhantomData,
         }];
-
-        nodes[0].update_bounds(shapes);
 
         Self::subdivide(0, shapes, &mut nodes);
 
         nodes
     }
-    fn update_bounds(&mut self, shapes: &[T]) {
-        match self.kind {
-            Leaf { shapes_range } => {
-                for index in shapes_range {
-                    let (min, max) = (shapes[index as usize].min(), shapes[index as usize].max());
+    #[inline(always)]
+    fn smallest_bounds(shapes: &[T], indices: impl Iterator<Item = u32>) -> (Vec3, Vec3) {
+        indices.fold(
+            (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
+            |(prev_min, prev_max), index| {
+                let (min, max) = (shapes[index as usize].min(), shapes[index as usize].max());
 
-                    self.min = self.min.min(min);
-                    self.max = self.max.max(max);
-                }
-            }
-            Branch { .. } => unreachable!(),
-        }
+                (prev_min.min(min), prev_max.max(max))
+            },
+        )
     }
-    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>) {
-        let extent = nodes[index].max - nodes[index].min;
-
-        // get the longest axis
-        let axis = {
-            let mut axis = u8::from(extent.y > extent.x);
-            if extent.z > extent.get(axis) {
-                axis = 2;
-            }
-            axis
+    /// uses surface area heuristic, (axis, value)
+    fn get_split(&self, shapes: &[T]) -> (u8, f32) {
+        let BvhNodeKind::Leaf { shapes_range } = self.kind else {
+            unreachable!()
         };
 
-        let split = nodes[index].min.get(axis) + extent.get(axis) * 0.5;
+        let mut best_split = (0, 0., f32::INFINITY); // (axis, value, cost)
+
+        for index in shapes_range {
+            let shape = &shapes[index as usize];
+
+            for axis in 0..3 {
+                let candidate_split = shape.centroid().get(axis);
+
+                let cost = (0..2)
+                    .map(|child| {
+                        let comparison = if child == 0 { f32::lt } else { f32::ge };
+
+                        let indices: Vec<_> = shapes_range
+                            .iter()
+                            .filter(|&index| {
+                                comparison(
+                                    &shapes[index as usize].centroid().get(axis),
+                                    &candidate_split,
+                                )
+                            })
+                            .collect(); // the collect could maybe be avoided, we just need an iter and its length
+
+                        let len = indices.len();
+
+                        let (min, max) = Self::smallest_bounds(shapes, indices.into_iter());
+                        let extent = max - min;
+
+                        let volume = extent.x * extent.y * extent.z;
+
+                        #[expect(clippy::cast_precision_loss)] // should be fine
+                        (volume * len as f32)
+                    })
+                    .reduce(|acc, e| acc + e)
+                    .expect("we iterate twice");
+
+                if cost < best_split.2 {
+                    best_split = (axis, candidate_split, cost);
+                }
+            }
+        }
+
+        (best_split.0, best_split.1)
+    }
+
+    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>) {
+        let (axis, split) = nodes[index].get_split(shapes);
 
         match nodes[index].kind {
             Leaf { shapes_range } => {
@@ -105,15 +141,15 @@ impl<T: Shape> BvhNode<T> {
                     child_ranges.map(|range| range.end - range.start > 2 && range != shapes_range);
 
                 let children = array::from_fn(|child_range_index| {
-                    let mut child = Self {
-                        kind: Leaf {
-                            shapes_range: child_ranges[child_range_index],
-                        },
-                        min: Vec3::splat(f32::INFINITY),
-                        max: Vec3::splat(f32::NEG_INFINITY),
+                    let shapes_range = child_ranges[child_range_index];
+                    let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
+
+                    let child = Self {
+                        kind: Leaf { shapes_range },
+                        min,
+                        max,
                         _type: PhantomData,
                     };
-                    child.update_bounds(shapes);
 
                     let child_index = nodes.len();
 

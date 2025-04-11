@@ -47,8 +47,8 @@ impl Vec3 {
         }
     }
     /// 0..=2
-    pub fn get(&self, idx: u8) -> f32 {
-        match idx {
+    pub fn get(&self, index: u8) -> f32 {
+        match index {
             0 => self.x,
             1 => self.y,
             2 => self.z,
