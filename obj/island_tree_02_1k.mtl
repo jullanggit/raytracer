@@ -30,7 +30,8 @@ map_Bump -bm 0.500000 textures/island_tree_02_branches_nor_gl_1k.png
 newmtl island_tree_02_leaves
 Ns 360.000000
 Ka 1.000000 1.000000 1.000000
-Kd 0.464639 0.800000 0.187849
+# luv my gf <3
+Kd 1 0.078431 0.576471
 Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
 Ni 1.000000
