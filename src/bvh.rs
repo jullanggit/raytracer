@@ -35,6 +35,9 @@ impl<T: Shape> BvhNode<T> {
         let shapes_range = Range::from(0..shapes.len().try_into().unwrap());
         let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
 
+        let extent = max - min;
+        let surface_area = 2. * (extent.x * extent.y + extent.x * extent.z + extent.y * extent.z);
+
         // init root node
         let mut nodes = vec![Self {
             kind: Leaf { shapes_range },
@@ -43,7 +46,7 @@ impl<T: Shape> BvhNode<T> {
             _type: PhantomData,
         }];
 
-        Self::subdivide(0, shapes, &mut nodes, f32::INFINITY);
+        Self::subdivide(0, shapes, &mut nodes, surface_area);
 
         nodes
     }
@@ -58,13 +61,13 @@ impl<T: Shape> BvhNode<T> {
             },
         )
     }
-    /// uses surface area heuristic, returns (axis, value, [cost lt, cost ge]). Returns `f32::INFINITY` when range is empty
-    fn get_split(&self, shapes: &[T]) -> (u8, f32, [f32; 2]) {
+    /// uses surface area heuristic, returns (axis, value, cost, [surface area lt, surface area ge]). Returns `f32::INFINITY` when range is empty
+    fn get_split(&self, shapes: &[T], parent_surface_area: f32) -> (u8, f32, f32, [f32; 2]) {
         let BvhNodeKind::Leaf { shapes_range } = self.kind else {
             unreachable!()
         };
 
-        let mut best_split = (0, 0., [f32::INFINITY, f32::INFINITY]); // (axis, value, cost)
+        let mut best_split = (0, 0., f32::INFINITY, [f32::NAN, f32::NAN]); // (axis, value, cost, surface areas)
 
         let extent = self.max - self.min;
         let bins_per_axis: u8 = 16;
@@ -77,7 +80,7 @@ impl<T: Shape> BvhNode<T> {
             for axis in 0..3 {
                 let candidate_split = offsets.get(axis);
 
-                let cost = array::from_fn(|child| {
+                let [[cost_lt, sa_lt], [cost_ge, sa_ge]] = array::from_fn(|child| {
                     let comparison = if child == 0 { f32::lt } else { f32::ge };
 
                     let mut num = 0;
@@ -96,7 +99,7 @@ impl<T: Shape> BvhNode<T> {
                     let (min, max) = Self::smallest_bounds(shapes, indices);
 
                     if num == 0 {
-                        return f32::INFINITY;
+                        return [f32::INFINITY, f32::NAN];
                     }
 
                     let extent = max - min;
@@ -104,12 +107,17 @@ impl<T: Shape> BvhNode<T> {
                     let surface_area =
                         2. * (extent.x * extent.y + extent.x * extent.z + extent.y * extent.z);
 
-                    #[expect(clippy::cast_precision_loss)] // should be fine
-                    (surface_area * num as f32)
+                    [
+                        #[expect(clippy::cast_precision_loss)] // should be fine
+                        ((surface_area / parent_surface_area) * num as f32),
+                        surface_area,
+                    ]
                 });
 
-                if cost[0] + cost[1] < best_split.2[0] + best_split.2[1] {
-                    best_split = (axis, candidate_split, cost);
+                let cost = cost_lt + cost_ge;
+
+                if cost < best_split.2 {
+                    best_split = (axis, candidate_split, cost, [sa_lt, sa_ge]);
                 }
             }
         }
@@ -117,20 +125,18 @@ impl<T: Shape> BvhNode<T> {
         best_split
     }
 
-    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>, current_cost: f32) {
+    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>, surface_area: f32) {
         let Leaf { shapes_range } = nodes[index].kind else {
             unreachable!()
         };
 
-        // limit min shapes
-        if shapes_range.end - shapes_range.start < 5 {
-            return;
-        }
+        let num = shapes_range.end - shapes_range.start;
 
-        let (axis, split, cost) = nodes[index].get_split(shapes);
+        let (axis, split, cost, child_surface_areas) = nodes[index].get_split(shapes, surface_area);
 
-        // stop if the cost is more than 90% of the parent cost
-        if cost[0] + cost[1] >= (current_cost * 0.9) {
+        // (relative cost of traversal + child costs) vs leaf cost
+        #[expect(clippy::cast_precision_loss)] // should be fine
+        if 0.33 + cost >= num as f32 {
             return;
         }
 
@@ -172,7 +178,12 @@ impl<T: Shape> BvhNode<T> {
 
             nodes.push(child);
 
-            Self::subdivide(child_index, shapes, nodes, cost[child_range_index]);
+            Self::subdivide(
+                child_index,
+                shapes,
+                nodes,
+                child_surface_areas[child_range_index],
+            );
 
             child_index.try_into().unwrap()
         });
