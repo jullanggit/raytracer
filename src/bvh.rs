@@ -111,61 +111,66 @@ impl<T: Shape> BvhNode<T> {
     }
 
     fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>, parent_cost: f32) {
-        let (axis, split, cost) = nodes[index].get_split(shapes);
+        let Leaf { shapes_range } = nodes[index].kind else {
+            unreachable!()
+        };
 
-        if cost[0] + cost[1] >= parent_cost {
+        // limit min shapes
+        if shapes_range.end - shapes_range.start < 5 {
             return;
         }
 
-        match nodes[index].kind {
-            Leaf { shapes_range } => {
-                let partition_point = u32::try_from(
-                    shapes[shapes_range.start as usize..shapes_range.end as usize]
-                        .iter_mut()
-                        .partition_in_place(|shape| shape.centroid().get(axis) < split),
-                )
-                .unwrap()
-                    + shapes_range.start;
+        let (axis, split, cost) = nodes[index].get_split(shapes);
 
-                // split box
-                let child_ranges = [
-                    shapes_range.start..partition_point,
-                    partition_point..shapes_range.end,
-                ]
-                .map(Range::from);
-
-                // assert valid ranges
-                for child_range in &child_ranges {
-                    debug_assert!(
-                        child_range.start <= child_range.end,
-                        "parent_range: {shapes_range:?}, partition_point: {partition_point:?} child-ranges: {child_ranges:?}"
-                    );
-                }
-
-                let children = array::from_fn(|child_range_index| {
-                    let shapes_range = child_ranges[child_range_index];
-                    let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
-
-                    let child = Self {
-                        kind: Leaf { shapes_range },
-                        min,
-                        max,
-                        _type: PhantomData,
-                    };
-
-                    let child_index = nodes.len();
-
-                    nodes.push(child);
-
-                    Self::subdivide(child_index, shapes, nodes, cost[child_range_index]);
-
-                    child_index.try_into().unwrap()
-                });
-
-                nodes[index].kind = Branch { children };
-            }
-            Branch { .. } => unreachable!(),
+        // stop if the cost is more than 90% of the parent cost
+        if cost[0] + cost[1] >= (parent_cost * 0.9) {
+            return;
         }
+
+        let partition_point = u32::try_from(
+            shapes[shapes_range.start as usize..shapes_range.end as usize]
+                .iter_mut()
+                .partition_in_place(|shape| shape.centroid().get(axis) < split),
+        )
+        .unwrap()
+            + shapes_range.start;
+
+        // split box
+        let child_ranges = [
+            shapes_range.start..partition_point,
+            partition_point..shapes_range.end,
+        ]
+        .map(Range::from);
+
+        // assert valid ranges
+        for child_range in &child_ranges {
+            debug_assert!(
+                child_range.start <= child_range.end,
+                "parent_range: {shapes_range:?}, partition_point: {partition_point:?} child-ranges: {child_ranges:?}"
+            );
+        }
+
+        let children = array::from_fn(|child_range_index| {
+            let shapes_range = child_ranges[child_range_index];
+            let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
+
+            let child = Self {
+                kind: Leaf { shapes_range },
+                min,
+                max,
+                _type: PhantomData,
+            };
+
+            let child_index = nodes.len();
+
+            nodes.push(child);
+
+            Self::subdivide(child_index, shapes, nodes, cost[child_range_index]);
+
+            child_index.try_into().unwrap()
+        });
+
+        nodes[index].kind = Branch { children };
     }
     /// Returns the closest shape that intersects with the ray, alongside the distance
     #[inline(always)]
