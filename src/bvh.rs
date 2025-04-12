@@ -67,11 +67,11 @@ impl<T: Shape> BvhNode<T> {
         let mut best_split = (0, 0., [f32::INFINITY, f32::INFINITY]); // (axis, value, cost)
 
         let extent = self.max - self.min;
-        let bins_per_axis: u8 = 3;
+        let bins_per_axis: u8 = 16;
         let offset_per_bin = extent / f32::from(bins_per_axis);
 
         // iterate over num_bins shapes, approximately evenly spaced
-        for offset_num in 1..bins_per_axis - 1 {
+        for offset_num in 1..bins_per_axis {
             let offsets = self.min + offset_per_bin * offset_num.into();
 
             for axis in 0..3 {
