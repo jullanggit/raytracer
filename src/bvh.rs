@@ -1,4 +1,4 @@
-use std::{array, cmp::Ordering, collections::BinaryHeap, marker::PhantomData, range::Range};
+use std::{array, cmp::Ordering, collections::BinaryHeap, f32, marker::PhantomData, range::Range};
 
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
@@ -43,7 +43,7 @@ impl<T: Shape> BvhNode<T> {
             _type: PhantomData,
         }];
 
-        Self::subdivide(0, shapes, &mut nodes);
+        Self::subdivide(0, shapes, &mut nodes, f32::INFINITY);
 
         nodes
     }
@@ -58,13 +58,13 @@ impl<T: Shape> BvhNode<T> {
             },
         )
     }
-    /// uses surface area heuristic, (axis, value)
-    fn get_split(&self, shapes: &[T]) -> (u8, f32) {
+    /// uses surface area heuristic, returns (axis, value, [cost lt, cost ge]). Returns `f32::INFINITY` when range is empty
+    fn get_split(&self, shapes: &[T]) -> (u8, f32, [f32; 2]) {
         let BvhNodeKind::Leaf { shapes_range } = self.kind else {
             unreachable!()
         };
 
-        let mut best_split = (0, 0., f32::INFINITY); // (axis, value, cost)
+        let mut best_split = (0, 0., [f32::INFINITY, f32::INFINITY]); // (axis, value, cost)
 
         for index in shapes_range {
             let shape = &shapes[index as usize];
@@ -72,51 +72,52 @@ impl<T: Shape> BvhNode<T> {
             for axis in 0..3 {
                 let candidate_split = shape.centroid().get(axis);
 
-                let cost = (0..2)
-                    .map(|child| {
-                        let comparison = if child == 0 { f32::lt } else { f32::ge };
+                let cost = array::from_fn(|child| {
+                    let comparison = if child == 0 { f32::lt } else { f32::ge };
 
-                        let indices: Vec<_> = shapes_range
-                            .iter()
-                            .filter(|&index| {
-                                comparison(
-                                    &shapes[index as usize].centroid().get(axis),
-                                    &candidate_split,
-                                )
-                            })
-                            .collect(); // the collect could maybe be avoided, we just need an iter and its length
+                    let indices: Vec<_> = shapes_range
+                        .iter()
+                        .filter(|&index| {
+                            comparison(
+                                &shapes[index as usize].centroid().get(axis),
+                                &candidate_split,
+                            )
+                        })
+                        .collect(); // the collect could maybe be avoided, we just need an iter and its length
 
-                        let len = indices.len();
+                    let len = indices.len();
 
-                        let (min, max) = Self::smallest_bounds(shapes, indices.into_iter());
-                        let extent = max - min;
+                    let (min, max) = Self::smallest_bounds(shapes, indices.into_iter());
+                    let extent = max - min;
 
-                        let volume = extent.x * extent.y * extent.z;
+                    let volume = extent.x * extent.y * extent.z;
 
-                        #[expect(clippy::cast_precision_loss)] // should be fine
-                        (volume * len as f32)
-                    })
-                    .reduce(|acc, e| acc + e)
-                    .expect("we iterate twice");
+                    #[expect(clippy::cast_precision_loss)] // should be fine
+                    (volume * len as f32)
+                });
 
-                if cost < best_split.2 {
+                if cost[0] + cost[1] < best_split.2[0] + best_split.2[1] {
                     best_split = (axis, candidate_split, cost);
                 }
             }
         }
 
-        (best_split.0, best_split.1)
+        best_split
     }
 
-    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>) {
-        let (axis, split) = nodes[index].get_split(shapes);
+    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>, parent_cost: f32) {
+        let (axis, split, cost) = nodes[index].get_split(shapes);
+
+        if cost[0] + cost[1] >= parent_cost {
+            return;
+        }
 
         match nodes[index].kind {
             Leaf { shapes_range } => {
                 let partition_point = u32::try_from(
                     shapes[shapes_range.start as usize..shapes_range.end as usize]
                         .iter_mut()
-                        .partition_in_place(|shape| shape.centroid().get(axis) > split),
+                        .partition_in_place(|shape| shape.centroid().get(axis) < split),
                 )
                 .unwrap()
                     + shapes_range.start;
@@ -136,10 +137,6 @@ impl<T: Shape> BvhNode<T> {
                     );
                 }
 
-                // whether recursion should continue
-                let recurse =
-                    child_ranges.map(|range| range.end - range.start > 2 && range != shapes_range);
-
                 let children = array::from_fn(|child_range_index| {
                     let shapes_range = child_ranges[child_range_index];
                     let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
@@ -155,9 +152,7 @@ impl<T: Shape> BvhNode<T> {
 
                     nodes.push(child);
 
-                    if recurse[child_range_index] {
-                        Self::subdivide(child_index, shapes, nodes);
-                    }
+                    Self::subdivide(child_index, shapes, nodes, cost[child_range_index]);
 
                     child_index.try_into().unwrap()
                 });
