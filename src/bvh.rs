@@ -89,18 +89,23 @@ impl<T: Shape> BvhNode<T> {
                                 &candidate_split,
                             )
                         })
-                        .map(|index| {
+                        .inspect(|_| {
                             num += 1;
-                            index
                         });
 
                     let (min, max) = Self::smallest_bounds(shapes, indices);
+
+                    if num == 0 {
+                        return f32::INFINITY;
+                    }
+
                     let extent = max - min;
 
-                    let volume = extent.x * extent.y * extent.z;
+                    let surface_area =
+                        2. * (extent.x * extent.y + extent.x * extent.z + extent.y * extent.z);
 
                     #[expect(clippy::cast_precision_loss)] // should be fine
-                    (volume * num as f32)
+                    (surface_area * num as f32)
                 });
 
                 if cost[0] + cost[1] < best_split.2[0] + best_split.2[1] {
@@ -112,7 +117,7 @@ impl<T: Shape> BvhNode<T> {
         best_split
     }
 
-    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>, parent_cost: f32) {
+    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>, current_cost: f32) {
         let Leaf { shapes_range } = nodes[index].kind else {
             unreachable!()
         };
@@ -125,7 +130,7 @@ impl<T: Shape> BvhNode<T> {
         let (axis, split, cost) = nodes[index].get_split(shapes);
 
         // stop if the cost is more than 90% of the parent cost
-        if cost[0] + cost[1] >= (parent_cost * 0.9) {
+        if cost[0] + cost[1] >= (current_cost * 0.9) {
             return;
         }
 
