@@ -109,7 +109,7 @@ impl<T: Shape> BvhNode<T> {
 
                     [
                         #[expect(clippy::cast_precision_loss)] // should be fine
-                        ((surface_area / parent_surface_area) * num as f32),
+                        ((surface_area / parent_surface_area) * 2. * num as f32),
                         surface_area,
                     ]
                 });
@@ -134,9 +134,9 @@ impl<T: Shape> BvhNode<T> {
 
         let (axis, split, cost, child_surface_areas) = nodes[index].get_split(shapes, surface_area);
 
-        // (relative cost of traversal + child costs) vs leaf cost
+        // (cost of traversal + child costs) vs leaf cost
         #[expect(clippy::cast_precision_loss)] // should be fine
-        if 0.33 + cost >= num as f32 {
+        if 15. + cost >= 2. * num as f32 {
             return;
         }
 
