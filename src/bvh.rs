@@ -80,7 +80,8 @@ impl<T: Shape> BvhNode<T> {
                 let cost = array::from_fn(|child| {
                     let comparison = if child == 0 { f32::lt } else { f32::ge };
 
-                    let indices: Vec<_> = shapes_range
+                    let mut num = 0;
+                    let indices = shapes_range
                         .iter()
                         .filter(|&index| {
                             comparison(
@@ -88,17 +89,18 @@ impl<T: Shape> BvhNode<T> {
                                 &candidate_split,
                             )
                         })
-                        .collect(); // the collect could maybe be avoided, we just need an iter and its length
+                        .map(|index| {
+                            num += 1;
+                            index
+                        });
 
-                    let len = indices.len();
-
-                    let (min, max) = Self::smallest_bounds(shapes, indices.into_iter());
+                    let (min, max) = Self::smallest_bounds(shapes, indices);
                     let extent = max - min;
 
                     let volume = extent.x * extent.y * extent.z;
 
                     #[expect(clippy::cast_precision_loss)] // should be fine
-                    (volume * len as f32)
+                    (volume * num as f32)
                 });
 
                 if cost[0] + cost[1] < best_split.2[0] + best_split.2[1] {
