@@ -65,11 +65,25 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
                 let mut iter = line[1..].split_whitespace().map(|part| {
                     let mut parts = part.splitn(3, '/');
 
-                    let vertex_index: usize = parts.next().unwrap().parse().unwrap();
+                    let vertex_index: usize = {
+                        let index: isize = parts.next().unwrap().parse().unwrap();
+                        if index < 0 {
+                            vertices.len() - index.abs() as usize
+                        } else {
+                            index as usize - 1
+                        }
+                    };
                     parts.next(); // skip texture
-                    let normal_index: usize = parts.next().unwrap().parse().unwrap();
+                    let normal_index: usize = {
+                        let index: isize = parts.next().unwrap().parse().unwrap();
+                        if index < 0 {
+                            normals.len() - index.abs() as usize
+                        } else {
+                            index as usize - 1
+                        }
+                    };
 
-                    (vertices[vertex_index - 1], normals.get(normal_index - 1))
+                    (vertices[vertex_index], normals.get(normal_index))
                 });
 
                 let first = iter.next().unwrap();
