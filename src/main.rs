@@ -24,7 +24,6 @@ static SCENE: OnceLock<Scene> = OnceLock::new();
 use crate::shapes::{Plane, Sphere};
 use std::{
     array,
-    collections::BinaryHeap,
     fs::File,
     io::Write as _,
     mem::size_of,
@@ -34,7 +33,7 @@ use std::{
     thread::{self, available_parallelism},
 };
 
-use bvh::{BvhNode, HeapEntry};
+use bvh::BvhNode;
 use material::{Material, Scatter};
 use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3};
@@ -235,7 +234,7 @@ impl Scene {
         thread::scope(|scope| {
             for _ in 0..num_threads {
                 scope.spawn(|| {
-                    let mut bvh_heap = BinaryHeap::new();
+                    let mut bvh_stack = Vec::new();
 
                     loop {
                         let mut next = chunks.lock().unwrap().next();
@@ -265,7 +264,7 @@ impl Scene {
                                             &ray,
                                             self.screen.max_bounces,
                                             &self.materials,
-                                            &mut bvh_heap,
+                                            &mut bvh_stack,
                                         )
                                     })
                                     .take(self.screen.samples_per_pixel)
@@ -298,26 +297,26 @@ impl Scene {
         ray: &Ray,
         remaining_depth: usize,
         materials: &[Material],
-        bvh_heap: &mut BinaryHeap<HeapEntry>, // is reused across shape types
+        bvh_stack: &mut Vec<(f32, u32)>, // is reused across shape types
     ) -> Color<f32> {
         if remaining_depth == 0 {
             return Color([0.; 3]);
         }
 
         let nearest_intersection =
-            BvhNode::closest_shape(ray, &self.shapes.spheres, &self.bvhs.spheres, bvh_heap)
+            BvhNode::closest_shape(ray, &self.shapes.spheres, &self.bvhs.spheres, bvh_stack)
                 .into_iter()
                 .chain(BvhNode::closest_shape(
                     ray,
                     &self.shapes.planes,
                     &self.bvhs.planes,
-                    bvh_heap,
+                    bvh_stack,
                 ))
                 .chain(BvhNode::closest_shape(
                     ray,
                     &self.shapes.triangles,
                     &self.bvhs.triangles,
-                    bvh_heap,
+                    bvh_stack,
                 ))
                 .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
 
@@ -333,7 +332,8 @@ impl Scene {
                 match shape_material.scatter(ray, normal, hit_point) {
                     Scatter::Scattered(ray, attenuation) => {
                         // calculate color of scattered ray and mix it with the current color
-                        attenuation * self.ray_color(&ray, remaining_depth - 1, materials, bvh_heap) // TODO: see if just multiplying the colors is right
+                        attenuation
+                            * self.ray_color(&ray, remaining_depth - 1, materials, bvh_stack) // TODO: see if just multiplying the colors is right
                     }
                     Scatter::Absorbed => Color([0.; 3]),
                     Scatter::Light(color) => color,

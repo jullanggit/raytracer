@@ -1,4 +1,4 @@
-use std::{array, cmp::Ordering, collections::BinaryHeap, f32, marker::PhantomData, range::Range};
+use std::{array, f32, marker::PhantomData, range::Range};
 
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
@@ -196,64 +196,65 @@ impl<T: Shape> BvhNode<T> {
         ray: &Ray,
         shapes: &[T],
         nodes: &[Self],
-        heap: &mut BinaryHeap<HeapEntry>,
+        stack: &mut Vec<(f32, u32)>,
     ) -> Option<(f32, Vec3, NormalizedVec3, u16)> {
-        heap.clear();
+        stack.clear();
+
+        let mut closest_hit = (f32::INFINITY, u32::MAX); // distance, shapes_index
 
         // stack is ordered from far to near
-        heap.push(HeapEntry::new(0., 0));
-
-        let mut closest = None; // (index, time)
+        stack.push((0., 0));
 
         // we always push the closest child last, so node is always the closest node
-        while let Some(entry) = heap.pop() {
-            let node = &nodes[entry.node_index as usize];
+        while let Some(entry) = stack.pop() {
+            let node = &nodes[entry.1 as usize];
 
-            // break if node isnt closer than closest
-            if let Some((_, closest)) = closest
-                && closest <= entry.tmin
-            {
+            // break if closest is closer than node
+            if closest_hit.0 <= entry.0 {
                 break;
             }
 
             match node.kind {
                 Branch { children } => {
-                    for child_node_index in children {
+                    match children.map(|child_node_index| {
                         let child = &nodes[child_node_index as usize];
 
-                        if let Some(intersection) = child.intersects(ray) {
+                        child.intersects(ray).and_then(|intersection| {
                             // push if intersection is closer than closest
-                            if let Some((_, closest)) = closest {
-                                if intersection < closest {
-                                    heap.push(HeapEntry::new(intersection, child_node_index));
-                                }
-                                // or closest is not yet initialized
-                            } else {
-                                heap.push(HeapEntry::new(intersection, child_node_index));
+                            (intersection < closest_hit.0).then_some(intersection)
+                        })
+                    }) {
+                        [Some(distance_0), Some(distance_1)] => {
+                            if distance_0 < distance_1 {
+                                // push further child first
+                                stack.push((distance_1, children[1]));
+                                stack.push((distance_0, children[0]));
                             }
                         }
+                        [Some(distance), None] => {
+                            stack.push((distance, children[0]));
+                        }
+                        [None, Some(distance)] => {
+                            stack.push((distance, children[1]));
+                        }
+                        [None, None] => {}
                     }
                 }
                 Leaf { shapes_range } => {
                     for index in shapes_range {
-                        let intersection = shapes[index as usize].intersects(ray);
-
-                        // update if new intersection is closer
-                        match (closest, intersection) {
-                            // new intersection is closer
-                            (Some((_, closest_time)), Some(time)) if time < closest_time => {
-                                closest = Some((index, time));
+                        if let Some(time) = shapes[index as usize].intersects(ray) {
+                            if time < closest_hit.0 {
+                                closest_hit = (time, index);
                             }
-                            // first intersection
-                            (None, Some(time)) => closest = Some((index, time)),
-                            _ => {}
                         }
                     }
                 }
             }
         }
 
-        closest.map(|(index, time)| {
+        closest_hit.0.is_finite().then(|| {
+            let (time, index) = closest_hit;
+
             let hit_point = ray.origin + *ray.direction.inner() * time;
 
             (
@@ -270,32 +271,4 @@ impl<T: Shape> BvhNode<T> {
 enum BvhNodeKind {
     Branch { children: [u32; 2] },
     Leaf { shapes_range: Range<u32> },
-}
-
-#[derive(PartialEq)]
-pub struct HeapEntry {
-    tmin: f32,
-    node_index: u32,
-}
-
-impl HeapEntry {
-    const fn new(tmin: f32, node_index: u32) -> Self {
-        Self { tmin, node_index }
-    }
-}
-
-impl Eq for HeapEntry {}
-
-#[expect(clippy::non_canonical_partial_ord_impl)]
-impl PartialOrd for HeapEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // Reverse the ordering so that a smaller tmin is considered "greater"
-        other.tmin.partial_cmp(&self.tmin)
-    }
-}
-
-impl Ord for HeapEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
-    }
 }
