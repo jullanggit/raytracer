@@ -9,6 +9,7 @@
 #![feature(substr_range)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
+#![allow(clippy::similar_names)]
 
 mod bvh;
 mod config;
@@ -17,6 +18,8 @@ mod obj;
 mod rng;
 mod shapes;
 mod vec3;
+
+static SCENE: OnceLock<Scene> = OnceLock::new();
 
 use crate::shapes::{Plane, Sphere};
 use std::{
@@ -27,7 +30,7 @@ use std::{
     mem::size_of,
     ops::{Add, Mul},
     slice,
-    sync::Mutex,
+    sync::{Mutex, OnceLock},
     thread::{self, available_parallelism},
 };
 
@@ -37,7 +40,7 @@ use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3};
 
 fn main() {
-    let scene = config::parse();
+    let scene = SCENE.get_or_init(config::parse);
     let image = scene.render();
     image.write_ppm_p6();
 }
@@ -155,13 +158,21 @@ struct Shapes {
     spheres: Box<[Sphere]>,
     planes: Box<[Plane]>,
     triangles: Box<[Triangle]>,
+    /// (normals, [d00, d01, d11, denominator])
+    vertex_normals: Box<[([NormalizedVec3; 3], [f32; 4])]>,
 }
 impl Shapes {
-    const fn new(spheres: Box<[Sphere]>, planes: Box<[Plane]>, triangles: Box<[Triangle]>) -> Self {
+    const fn new(
+        spheres: Box<[Sphere]>,
+        planes: Box<[Plane]>,
+        triangles: Box<[Triangle]>,
+        vertex_normals: Box<[([NormalizedVec3; 3], [f32; 4])]>,
+    ) -> Self {
         Self {
             spheres,
             planes,
             triangles,
+            vertex_normals,
         }
     }
 }

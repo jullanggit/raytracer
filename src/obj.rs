@@ -5,11 +5,15 @@ use crate::{
     config::push_material,
     material::{Material, MaterialKind},
     shapes::Triangle,
-    vec3::Vec3,
+    vec3::{NormalizedVec3, Vec3},
 };
 
+#[expect(clippy::type_complexity)]
 #[inline(always)]
-pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
+pub fn parse(
+    path: &str,
+    materials: &mut Vec<Material>,
+) -> (Vec<Triangle>, Vec<([NormalizedVec3; 3], [f32; 4])>) {
     let string = fs::read_to_string(path).expect("Failed to read obj file");
     let lines = string.lines();
 
@@ -34,7 +38,7 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
         .map(|line| line[2..].trim().into())
         .collect();
 
-    let no_normals = normals.is_empty();
+    let mut normals_out = Vec::new();
 
     let mut triangles = Vec::new();
 
@@ -60,15 +64,17 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
 
         lines
             .filter(|line| line.starts_with('f')) // get faces
-            .flat_map(|line| {
+            .for_each(|line| {
                 // get vertices and normals
                 let mut iter = line[1..].split_whitespace().map(|part| {
                     let mut parts = part.splitn(3, '/');
 
                     let vertex_index: usize = {
                         let index: isize = parts.next().unwrap().parse().unwrap();
+
+                        #[expect(clippy::cast_sign_loss)] // we check for negative index
                         if index < 0 {
-                            vertices.len() - index.abs() as usize
+                            vertices.len() - index.unsigned_abs()
                         } else {
                             index as usize - 1
                         }
@@ -76,8 +82,10 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
                     parts.next(); // skip texture
                     let normal_index: usize = {
                         let index: isize = parts.next().unwrap().parse().unwrap();
+
+                        #[expect(clippy::cast_sign_loss)] // we check for negative index
                         if index < 0 {
-                            normals.len() - index.abs() as usize
+                            normals.len() - index.unsigned_abs()
                         } else {
                             index as usize - 1
                         }
@@ -86,32 +94,42 @@ pub fn parse(path: &str, materials: &mut Vec<Material>) -> Vec<Triangle> {
                     (vertices[vertex_index], normals.get(normal_index))
                 });
 
-                let first = iter.next().unwrap();
+                let (vertex1, normal1) = iter.next().unwrap();
 
                 // Fan triangulation
                 // TODO: maybe use a better approach
-                iter.map_windows(move |vertices: &[_; 2]| {
-                    if no_normals {
-                        Triangle::default_normals(first.0, vertices[0].0, vertices[1].0, index)
-                    } else {
-                        Triangle::new(
-                            first.0,
-                            vertices[0].0,
-                            vertices[1].0,
+                iter.map_windows(|&[(vertex2, normal2), (vertex3, normal3)]: &[_; 2]| {
+                    if let Some(normal1) = normal1
+                        && let Some(normal2) = normal2
+                        && let Some(normal3) = normal3
+                    {
+                        let e1 = vertex2 - vertex1;
+                        let e2 = vertex3 - vertex1;
+
+                        let (d00, d01, d11) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
+
+                        let normal_index = normals_out.len();
+
+                        normals_out.push((
                             [
-                                first.1.unwrap().normalize(),
-                                vertices[0].1.unwrap().normalize(),
-                                vertices[1].1.unwrap().normalize(),
+                                normal1.normalize(),
+                                normal2.normalize(),
+                                normal3.normalize(),
                             ],
-                            index,
-                        )
+                            [d00, d01, d11, d00 * d11 - d01.powi(2)],
+                        ));
+
+                        #[expect(clippy::cast_possible_truncation)]
+                        Triangle::new(vertex1, vertex2, vertex3, Some(normal_index as u32), index)
+                    } else {
+                        Triangle::new(vertex1, vertex2, vertex3, None, index)
                     }
                 })
-            })
-            .collect_into(&mut triangles);
+                .collect_into(&mut triangles);
+            });
     }
 
-    triangles
+    (triangles, normals_out)
 }
 
 /// Returns a `HashMap` of (material name -> material index)
