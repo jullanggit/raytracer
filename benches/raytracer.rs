@@ -1,5 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use raytracer::config;
+use raytracer::{SCENE, config};
 
 fn config_parsing(c: &mut Criterion) {
     let string = "screen(-1 2.5 10, 2 0 0, 0 -2 0, 1000, 1000, 10, 10)
@@ -13,13 +13,14 @@ triangles()";
 }
 
 fn rendering(c: &mut Criterion) {
-    let string = "screen(-1 1 10, 2 0 0, 0 -2 0, 1000, 1000, 10, 10)
-camera(0 0 20)
+    let string = "screen(-1.15 1.75 3, 2 0 0, 0 -2 0, 1000, 1000, 10, 10)
+camera(0.15 0.75 30)
 spheres()
 planes()
 obj((bunny))
 triangles()";
-    let scene = config::parse(string);
+
+    let scene = SCENE.get_or_init(|| config::parse(string));
 
     c.bench_function("rendering", |b| b.iter(|| scene.render()));
 }
@@ -27,7 +28,7 @@ triangles()";
 criterion_group! {
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = config_parsing
+    targets = rendering
 }
 
 criterion_main!(benches);
