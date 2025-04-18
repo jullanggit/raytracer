@@ -205,14 +205,15 @@ impl<T: Shape> BvhNode<T> {
         // stack is ordered from far to near
         stack.push((0., 0));
 
-        // we always push the closest child last, so node is always the closest node
+        // we always push the closest child last, so node is almost always the closest node
         while let Some(entry) = stack.pop() {
-            let node = &nodes[entry.1 as usize];
-
-            // break if closest is closer than node
+            // skip if closest is closer than node
+            // there are some edge cases where the entry isnt the closest ones, so we dont just break here
             if closest_hit.0 <= entry.0 {
-                break;
+                continue;
             }
+
+            let node = &nodes[entry.1 as usize];
 
             match node.kind {
                 Branch { children } => {
@@ -229,6 +230,10 @@ impl<T: Shape> BvhNode<T> {
                                 // push further child first
                                 stack.push((distance_1, children[1]));
                                 stack.push((distance_0, children[0]));
+                            } else {
+                                // push further child first
+                                stack.push((distance_0, children[0]));
+                                stack.push((distance_1, children[1]));
                             }
                         }
                         [Some(distance), None] => {
