@@ -1,13 +1,11 @@
-use std::{fs, str::Split};
+use std::str::Split;
 
 use crate::{
     Bvhs, Camera, Plane, Scene, Screen, Shapes, Sphere, bvh::BvhNode, material::Material, obj,
     shapes::Triangle, vec3::Vec3,
 };
 
-pub fn parse() -> Scene {
-    let string = fs::read_to_string("scene").unwrap();
-
+pub fn parse(string: &str) -> Scene {
     let mut iter = string.lines();
 
     let mut screen = None;

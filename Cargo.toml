@@ -14,6 +14,7 @@ pedantic = "warn"
 derive_partial_eq_without_eq = { level = "allow", priority = 1 } # Dont always want eq on enums
 cargo_common_metadata = { level = "allow", priority = 1 }
 inline_always = { level = "allow", priority = 1 }
+missing_panics_doc = { level = "allow", priority = 1 }
 
 # expect_used = "warn"
 
@@ -65,3 +66,10 @@ unused_result_ok = "warn"
 unused_trait_names = "warn"
 verbose_file_reads = "warn"
 wildcard_enum_match_arm = "warn"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "raytracer"
+harness = false
