@@ -5,18 +5,21 @@ use crate::{
     shapes::Triangle, vec3::Vec3,
 };
 
+#[expect(clippy::too_many_lines)]
 pub fn parse(string: &str) -> Scene {
     let mut iter = string.lines();
 
+    // init values
+    let mut incremental = None;
     let mut screen = None;
     let mut camera = None;
     let mut spheres = None;
     let mut planes = None;
     let mut triangles = None;
     let mut normals = None;
-
     let mut materials = Vec::new();
 
+    // parse
     while screen.is_none()
         | camera.is_none()
         | spheres.is_none()
@@ -26,6 +29,9 @@ pub fn parse(string: &str) -> Scene {
         let next = iter.next().unwrap();
         // split into field and value
         match next[..next.len() - 1].split_once('(').unwrap() {
+            ("incremental", value) => {
+                incremental = Some(value.parse().unwrap());
+            }
             ("screen", value) => {
                 screen = Some(single_item_parse(value, |values| {
                     Screen::new(
@@ -89,13 +95,21 @@ pub fn parse(string: &str) -> Scene {
         }
     }
 
+    // wrap
+    let screen = screen.unwrap();
     let mut spheres = spheres.unwrap().into_boxed_slice();
     let mut planes = planes.unwrap().into_boxed_slice();
     let mut triangles = triangles.unwrap().into_boxed_slice();
     let normals = normals.map_or_else(Box::default, |normals| normals.into_boxed_slice());
 
+    if let Some(amount) = incremental {
+        assert!(amount != 0);
+        assert!(screen.samples_per_pixel % amount == 0);
+    }
+
     Scene::new(
-        screen.unwrap(),
+        incremental,
+        screen,
         camera.unwrap(),
         Bvhs::new(
             BvhNode::new(&mut spheres).into_boxed_slice(),

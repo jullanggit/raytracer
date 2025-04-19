@@ -1,3 +1,4 @@
+#![feature(super_let)]
 #![feature(let_chains)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(iter_map_windows)]
@@ -27,11 +28,14 @@ use crate::shapes::{Plane, Sphere};
 use std::{
     array,
     fs::File,
-    io::Write as _,
-    mem::size_of,
-    ops::{Add, Mul, MulAssign},
+    io::{Seek as _, Write as _},
+    ops::{Add, Div, Mul, MulAssign},
+    os::unix::fs::FileExt as _,
     slice,
-    sync::{Mutex, OnceLock},
+    sync::{
+        Mutex, OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    },
     thread::{self, available_parallelism},
 };
 
@@ -40,41 +44,26 @@ use material::{Material, Scatter};
 use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3};
 
+/// A ppm p6 image
 pub struct Image {
-    width: usize,
-    height: usize,
-
+    file: File,
     data: Vec<Color<u8>>,
 }
 impl Image {
-    fn new(width: usize, height: usize) -> Self {
-        let data = vec![Color([0; 3]); width * height]; // zero-initialise vec
-        Self {
-            width,
-            height,
-            data,
-        }
-    }
-    pub fn write_ppm_p6(&self) {
+    /// (Self, header end offset)
+    fn new(width: usize, height: usize) -> (Self, u64) {
         let mut file = File::create("target/out.ppm").unwrap();
-
         // Write ppm header
-        writeln!(&mut file, "P6\n{} {} 255", self.width, self.height).unwrap();
+        writeln!(&mut file, "P6\n{width} {height} 255").unwrap();
 
-        // SAFETY:
-        // - `Pixel` is a `repr(transparent)` wrapper around [u8;3],
-        // - so `self.data` is effectively a &[[u8;3]]
-        // - [u8;3] and u8 have the same alignment
-        // - We adjust the length of the resulting slice
-        file.write_all(unsafe {
-            slice::from_raw_parts(
-                self.data.as_ptr().cast::<u8>(),
-                self.data.len() * size_of::<Color<u8>>(),
-            )
-        })
-        .unwrap();
+        let data = vec![Color([0; 3]); width * height]; // zero-initialise vec
 
-        file.flush().unwrap();
+        let position = file.stream_position().unwrap();
+
+        (Self { file, data }, position)
+    }
+    pub fn write(&mut self) {
+        self.file.write_all(Color::as_bytes(&self.data)).unwrap();
     }
 }
 
@@ -82,8 +71,25 @@ impl Image {
 #[repr(transparent)]
 /// A rgb color
 /// for Color<f32> values should be between 0 and 1
-// TODO: use Vec3 internally
 pub struct Color<T>([T; 3]);
+
+impl Color<f32> {
+    fn color_correct(self) -> Self {
+        // gamma 2 correction
+        Self(self.0.map(f32::sqrt))
+    }
+}
+
+impl Color<u8> {
+    const fn as_bytes(slice: &[Self]) -> &[u8] {
+        // SAFETY:
+        // - `Self` is a `repr(transparent)` wrapper around [u8;3],
+        // - so `self.data` is effectively a &[[u8;3]]
+        // - [u8;3] and u8 have the same alignment
+        // - We adjust the length of the resulting slice
+        unsafe { slice::from_raw_parts(slice.as_ptr().cast::<u8>(), size_of_val(slice)) }
+    }
+}
 
 impl Mul for Color<f32> {
     type Output = Self;
@@ -102,6 +108,12 @@ impl Mul<f32> for Color<f32> {
         Self(self.0.map(|num| num * rhs))
     }
 }
+impl Div<f32> for Color<f32> {
+    type Output = Self;
+    fn div(self, rhs: f32) -> Self::Output {
+        Self(self.0.map(|num| num / rhs))
+    }
+}
 impl Add for Color<f32> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
@@ -115,11 +127,16 @@ impl From<Color<f32>> for Color<u8> {
         Self(value.0.map(|num| {
             debug_assert!((0.0..=1.).contains(&num));
 
-            // gamma 2 correction
-            (num.sqrt() * 255.) as u8
+            (num * 255.) as u8
         }))
     }
 }
+impl From<Color<u8>> for Color<f32> {
+    fn from(value: Color<u8>) -> Self {
+        Self(value.0.map(f32::from).map(|e| e / 255.))
+    }
+}
+
 #[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
 impl From<&str> for Color<f32> {
     fn from(value: &str) -> Self {
@@ -146,6 +163,7 @@ impl Ray {
 
 #[derive(Debug)]
 pub struct Scene {
+    incremental: Option<usize>,
     screen: Screen,
     camera: Camera,
     shapes: Shapes,
@@ -199,8 +217,56 @@ impl Bvhs {
     }
 }
 
+struct ChunkManager<'a> {
+    chunks: Vec<ManagedChunk<'a>>,
+    chunk_position: AtomicUsize,
+    num_completed: AtomicUsize,
+    max_sample_iterations: usize,
+}
+impl<'a> ChunkManager<'a> {
+    fn next(&self) -> Option<&ManagedChunk<'a>> {
+        while self.num_completed.load(Ordering::Relaxed) != self.chunks.len() {
+            let index = {
+                let index = self.chunk_position.fetch_add(1, Ordering::AcqRel);
+                // wrap chunk position around
+                if index > self.chunks.len() {
+                    self.chunk_position
+                        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                            Some(current % self.chunks.len())
+                        })
+                        .unwrap()
+                } else {
+                    index
+                }
+            };
+
+            let chunk = &self.chunks[index % self.chunks.len()];
+
+            if chunk.sample_iteration.load(Ordering::Acquire) < self.max_sample_iterations {
+                // increment sample iteration
+                if chunk.sample_iteration.fetch_add(1, Ordering::AcqRel)
+                // if it is the last one, also increment completed
+                    == self.max_sample_iterations - 1
+                {
+                    self.num_completed.fetch_add(1, Ordering::Relaxed);
+                }
+                return Some(chunk);
+            }
+        }
+
+        None
+    }
+}
+
+struct ManagedChunk<'a> {
+    chunk: Mutex<&'a mut [Color<u8>]>,
+    chunk_index: usize,
+    sample_iteration: AtomicUsize,
+}
+
 impl Scene {
     const fn new(
+        incremental: Option<usize>,
         screen: Screen,
         camera: Camera,
         bvhs: Bvhs,
@@ -208,6 +274,7 @@ impl Scene {
         materials: Vec<Material>,
     ) -> Self {
         Self {
+            incremental,
             screen,
             camera,
             shapes,
@@ -218,11 +285,12 @@ impl Scene {
 
     // The only precision loss is turning the resolution into floats, which is fine
     #[expect(clippy::cast_precision_loss)]
-    pub fn render(&self) -> Image {
+    pub fn render(&self) {
         let row_step = self.screen.top_edge / (self.screen.resolution_width - 1) as f32;
         let column_step = self.screen.left_edge / (self.screen.resolution_height - 1) as f32;
 
-        let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
+        let (mut image, offset) =
+            Image::new(self.screen.resolution_width, self.screen.resolution_height);
 
         let num_threads: usize = available_parallelism().unwrap().into();
 
@@ -230,61 +298,115 @@ impl Scene {
         let chunk_size = (self.screen.resolution_width * self.screen.resolution_height)
             / (num_threads * num_threads);
 
-        let chunks = Mutex::new(image.data.chunks_mut(chunk_size).enumerate());
+        // the amount of samples to perform at once
+        let sample_chunk_size = self.incremental.unwrap_or(self.screen.samples_per_pixel);
+
+        // this division is always clean as we assert that incremental cleanly divides samples per pixel
+        #[expect(clippy::integer_division)]
+        let num_sample_chunks = self.screen.samples_per_pixel / sample_chunk_size;
+
+        let chunks = ChunkManager {
+            chunks: image
+                .data
+                .chunks_mut(chunk_size)
+                .enumerate()
+                .map(|(chunk_index, chunk)| ManagedChunk {
+                    chunk: Mutex::new(chunk),
+                    chunk_index,
+                    sample_iteration: AtomicUsize::new(0),
+                })
+                .collect::<Vec<_>>(),
+            chunk_position: AtomicUsize::new(0),
+            num_completed: AtomicUsize::new(0),
+            max_sample_iterations: num_sample_chunks,
+        };
 
         thread::scope(|scope| {
             for _ in 0..num_threads {
                 scope.spawn(|| {
                     let mut bvh_stack = Vec::new();
 
-                    loop {
-                        let mut next = chunks.lock().unwrap().next();
+                    while let Some(next_chunk) = chunks.next() {
+                        let mut chunk = next_chunk.chunk.lock().unwrap();
 
-                        if let Some((chunk_index, ref mut chunk)) = next {
-                            // For every (x,y) pixel
-                            for i in 0..chunk.len() {
-                                let offset_i = chunk_index * chunk_size + i; // correct offset
+                        // For every (x,y) pixel
+                        for i in 0..chunk.len() {
+                            let offset_i = next_chunk.chunk_index * chunk_size + i; // correct offset
 
-                                let x = offset_i % self.screen.resolution_width;
-                                #[expect(clippy::integer_division)]
-                                let y = offset_i / self.screen.resolution_width;
+                            let x = offset_i % self.screen.resolution_width;
+                            #[expect(clippy::integer_division)]
+                            let y = offset_i / self.screen.resolution_width;
 
-                                // Multiple samples
-                                let color = Color(
-                                    std::iter::repeat_with(|| {
-                                        let pixel_position = self.screen.top_left
+                            let color = Color(
+                                std::iter::repeat_with(|| {
+                                    let pixel_position = self.screen.top_left
                                                 + row_step * (x as f32 + rng::f32() / 2.) // Add random variation
                                                 + column_step * (y as f32 + rng::f32() / 2.);
 
-                                        let ray = Ray::new(
-                                            self.camera.position,
-                                            (pixel_position - self.camera.position).normalize(),
-                                        );
+                                    let ray = Ray::new(
+                                        self.camera.position,
+                                        (pixel_position - self.camera.position).normalize(),
+                                    );
 
-                                        self.ray_color(ray, &self.materials, &mut bvh_stack)
-                                    })
-                                    .take(self.screen.samples_per_pixel)
-                                    .reduce(|acc, element| {
-                                        Color(array::from_fn(|index| {
-                                            acc.0[index] + element.0[index]
-                                        }))
-                                    })
-                                    .unwrap_or_default()
-                                    .0
-                                    .map(|e| e / self.screen.samples_per_pixel as f32),
-                                );
+                                    self.ray_color(ray, &self.materials, &mut bvh_stack)
+                                })
+                                .take(sample_chunk_size)
+                                // average colors
+                                .reduce(|acc, element| {
+                                    Color(array::from_fn(|index| {
+                                        // by first adding them up
+                                        acc.0[index] + element.0[index]
+                                    }))
+                                })
+                                .unwrap_or_default()
+                                .0
+                                // and then dividing by samples
+                                .map(|e| e / sample_chunk_size as f32),
+                            );
 
-                                chunk[i] = color.into();
+                            if self.incremental.is_some() {
+                                let sample_iteration =
+                                    next_chunk.sample_iteration.load(Ordering::Acquire);
+
+                                // average with last incremental iteration
+                                chunk[i] = ((Color::<f32>::from(chunk[i])
+                                    * sample_iteration as f32
+                                    + color.color_correct())
+                                    / (sample_iteration as f32 + 1.))
+                                    .into();
+                            } else {
+                                chunk[i] = color.color_correct().into();
                             }
-                        } else {
-                            break;
+                        }
+
+                        if self.incremental.is_some() {
+                            let written = image
+                                .file
+                                .write_at(
+                                    Color::as_bytes(*chunk),
+                                    offset
+                                        + next_chunk.chunk_index as u64
+                                            * chunk_size as u64
+                                            * size_of::<Color<u8>>() as u64,
+                                )
+                                .unwrap();
+
+                            assert!(
+                                written == size_of_val(*chunk),
+                                "written: {written}, chunk len: {}",
+                                chunk.len()
+                            );
                         }
                     }
                 });
             }
         });
 
-        image
+        if self.incremental.is_none() {
+            image.write();
+        }
+
+        image.file.flush().unwrap();
     }
 
     #[inline(always)]

@@ -1,4 +1,4 @@
-A zero-dependency WIP raytracer, following https://matklad.github.io/2022/12/31/raytracer-construction-kit.html
+A zero-dependency raytracer, following https://matklad.github.io/2022/12/31/raytracer-construction-kit.html
 
 ## Features
 - Spheres, Planes & Triangles
@@ -8,6 +8,7 @@ A zero-dependency WIP raytracer, following https://matklad.github.io/2022/12/31/
 - Custom scene description
 - Bounding Volume Hierarchies
 - Multithreading
+- Live preview
 
 ## Usage
 - if you dont want to pay the price for expensive normal calculations, remove all vn lines from the .obj file
