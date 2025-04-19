@@ -217,41 +217,6 @@ impl Bvhs {
     }
 }
 
-struct ChunkManager<'a> {
-    chunks: Vec<ManagedChunk<'a>>,
-    chunk_position: AtomicUsize,
-    num_completed: AtomicUsize,
-    max_sample_iterations: usize,
-}
-impl<'a> ChunkManager<'a> {
-    fn next(&self) -> Option<&ManagedChunk<'a>> {
-        while self.num_completed.load(Ordering::Relaxed) != self.chunks.len() {
-            let index = self.chunk_position.fetch_add(1, Ordering::Relaxed);
-
-            let chunk = &self.chunks[index % self.chunks.len()];
-
-            if chunk.sample_iteration.load(Ordering::Acquire) < self.max_sample_iterations {
-                // increment sample iteration
-                if chunk.sample_iteration.fetch_add(1, Ordering::AcqRel)
-                // if it is the last one, also increment completed
-                    == self.max_sample_iterations - 1
-                {
-                    self.num_completed.fetch_add(1, Ordering::Relaxed);
-                }
-                return Some(chunk);
-            }
-        }
-
-        None
-    }
-}
-
-struct ManagedChunk<'a> {
-    chunk: Mutex<&'a mut [Color<u8>]>,
-    chunk_index: usize,
-    sample_iteration: AtomicUsize,
-}
-
 impl Scene {
     const fn new(
         incremental: Option<usize>,
@@ -286,6 +251,12 @@ impl Scene {
         let chunk_size = (self.screen.resolution_width * self.screen.resolution_height)
             / (num_threads * num_threads);
 
+        let chunks = image
+            .data
+            .chunks_mut(chunk_size)
+            .map(Mutex::new)
+            .collect::<Vec<_>>();
+
         // the amount of samples to perform at once
         let sample_chunk_size = self.incremental.unwrap_or(self.screen.samples_per_pixel);
 
@@ -293,33 +264,30 @@ impl Scene {
         #[expect(clippy::integer_division)]
         let num_sample_chunks = self.screen.samples_per_pixel / sample_chunk_size;
 
-        let chunks = ChunkManager {
-            chunks: image
-                .data
-                .chunks_mut(chunk_size)
-                .enumerate()
-                .map(|(chunk_index, chunk)| ManagedChunk {
-                    chunk: Mutex::new(chunk),
-                    chunk_index,
-                    sample_iteration: AtomicUsize::new(0),
-                })
-                .collect::<Vec<_>>(),
-            chunk_position: AtomicUsize::new(0),
-            num_completed: AtomicUsize::new(0),
-            max_sample_iterations: num_sample_chunks,
-        };
+        let total_work = chunks.len() * num_sample_chunks;
+        let work_counter = AtomicUsize::new(0);
 
         thread::scope(|scope| {
             for _ in 0..num_threads {
                 scope.spawn(|| {
                     let mut bvh_stack = Vec::new();
 
-                    while let Some(next_chunk) = chunks.next() {
-                        let mut chunk = next_chunk.chunk.lock().unwrap();
+                    loop {
+                        let work_index = work_counter.fetch_add(1, Ordering::Relaxed);
+                        if work_index >= total_work {
+                            break;
+                        }
+
+                        #[expect(clippy::integer_division)]
+                        let sample_iteration = work_index / chunks.len();
+                        let chunk_index = work_index % chunks.len();
+
+                        let mut chunk = chunks[chunk_index].lock().unwrap();
 
                         // For every (x,y) pixel
                         for i in 0..chunk.len() {
-                            let offset_i = next_chunk.chunk_index * chunk_size + i; // correct offset
+                            // correct offset
+                            let offset_i = chunk_index * chunk_size + i;
 
                             let x = offset_i % self.screen.resolution_width;
                             #[expect(clippy::integer_division)]
@@ -353,9 +321,6 @@ impl Scene {
                             );
 
                             if self.incremental.is_some() {
-                                let sample_iteration =
-                                    next_chunk.sample_iteration.load(Ordering::Acquire);
-
                                 // average with last incremental iteration
                                 chunk[i] = ((Color::<f32>::from(chunk[i])
                                     * sample_iteration as f32
@@ -373,7 +338,7 @@ impl Scene {
                                 .write_at(
                                     Color::as_bytes(*chunk),
                                     offset
-                                        + next_chunk.chunk_index as u64
+                                        + chunk_index as u64
                                             * chunk_size as u64
                                             * size_of::<Color<u8>>() as u64,
                                 )
