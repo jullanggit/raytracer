@@ -80,18 +80,21 @@ pub fn parse(
                         }
                     };
                     parts.next(); // skip texture
-                    let normal_index: usize = {
-                        let index: isize = parts.next().unwrap().parse().unwrap();
+                    let mut normal_index = || {
+                        let index: isize = parts.next()?.parse().ok()?;
 
                         #[expect(clippy::cast_sign_loss)] // we check for negative index
-                        if index < 0 {
+                        Some(if index < 0 {
                             normals.len() - index.unsigned_abs()
                         } else {
                             index as usize - 1
-                        }
+                        })
                     };
 
-                    (vertices[vertex_index], normals.get(normal_index))
+                    (
+                        vertices[vertex_index],
+                        normal_index().and_then(|index| normals.get(index)),
+                    )
                 });
 
                 let (vertex1, normal1) = iter.next().unwrap();
