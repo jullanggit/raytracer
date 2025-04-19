@@ -1,1 +1,2 @@
-
+- live preview
+- make ray_color() iterative
