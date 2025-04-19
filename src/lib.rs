@@ -227,7 +227,7 @@ impl<'a> ChunkManager<'a> {
     fn next(&self) -> Option<&ManagedChunk<'a>> {
         while self.num_completed.load(Ordering::Relaxed) != self.chunks.len() {
             let index = {
-                let index = self.chunk_position.fetch_add(1, Ordering::AcqRel);
+                let index = self.chunk_position.fetch_add(1, Ordering::Relaxed);
                 // wrap chunk position around
                 if index > self.chunks.len() {
                     self.chunk_position
