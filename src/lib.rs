@@ -29,7 +29,7 @@ use std::{
     fs::File,
     io::Write as _,
     mem::size_of,
-    ops::{Add, Mul},
+    ops::{Add, Mul, MulAssign},
     slice,
     sync::{Mutex, OnceLock},
     thread::{self, available_parallelism},
@@ -89,6 +89,11 @@ impl Mul for Color<f32> {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
         Self(array::from_fn(|index| self.0[index] * rhs.0[index]))
+    }
+}
+impl MulAssign for Color<f32> {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = Self(array::from_fn(|index| self.0[index] * rhs.0[index]));
     }
 }
 impl Mul<f32> for Color<f32> {
@@ -256,12 +261,7 @@ impl Scene {
                                             (pixel_position - self.camera.position).normalize(),
                                         );
 
-                                        self.ray_color(
-                                            &ray,
-                                            self.screen.max_bounces,
-                                            &self.materials,
-                                            &mut bvh_stack,
-                                        )
+                                        self.ray_color(ray, &self.materials, &mut bvh_stack)
                                     })
                                     .take(self.screen.samples_per_pixel)
                                     .reduce(|acc, element| {
@@ -290,52 +290,70 @@ impl Scene {
     #[inline(always)]
     fn ray_color(
         &self,
-        ray: &Ray,
-        remaining_depth: usize,
+        ray: Ray,
         materials: &[Material],
         bvh_stack: &mut Vec<(f32, u32)>, // is reused across shape types
     ) -> Color<f32> {
-        if remaining_depth == 0 {
-            return Color([0.; 3]);
+        let mut current_ray = ray;
+        let mut current_color = None;
+
+        for _ in 0..self.screen.max_bounces {
+            let nearest_intersection = BvhNode::closest_shape(
+                &current_ray,
+                &self.shapes.spheres,
+                &self.bvhs.spheres,
+                bvh_stack,
+            )
+            .into_iter()
+            .chain(BvhNode::closest_shape(
+                &current_ray,
+                &self.shapes.planes,
+                &self.bvhs.planes,
+                bvh_stack,
+            ))
+            .chain(BvhNode::closest_shape(
+                &current_ray,
+                &self.shapes.triangles,
+                &self.bvhs.triangles,
+                bvh_stack,
+            ))
+            .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
+
+            match nearest_intersection {
+                // skybox
+                None => {
+                    let a = 0.5 * (current_ray.direction.inner().y + 1.0); // y scaled to 0.5-1
+
+                    *current_color.get_or_insert(Color([1.; 3])) *=
+                        Color([0.2, 0.2, 0.8]) * (1.0 - a) + Color([1.; 3]) * a;
+
+                    break;
+                }
+                // scattter
+                Some((_, hit_point, normal, shape_material_index)) => {
+                    let shape_material = &materials[shape_material_index as usize];
+
+                    match shape_material.scatter(&current_ray, normal, hit_point) {
+                        Scatter::Scattered(ray, attenuation) => {
+                            // calculate color of scattered ray and mix it with the current color
+                            *current_color.get_or_insert(Color([1.; 3])) *= attenuation;
+
+                            current_ray = ray;
+                        }
+                        Scatter::Absorbed => {
+                            current_color = Some(Color([0.; 3]));
+                            break;
+                        }
+                        Scatter::Light(color) => {
+                            *current_color.get_or_insert(Color([1.; 3])) *= color;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
-        let nearest_intersection =
-            BvhNode::closest_shape(ray, &self.shapes.spheres, &self.bvhs.spheres, bvh_stack)
-                .into_iter()
-                .chain(BvhNode::closest_shape(
-                    ray,
-                    &self.shapes.planes,
-                    &self.bvhs.planes,
-                    bvh_stack,
-                ))
-                .chain(BvhNode::closest_shape(
-                    ray,
-                    &self.shapes.triangles,
-                    &self.bvhs.triangles,
-                    bvh_stack,
-                ))
-                .min_by(|&(a, ..), &(b, ..)| a.partial_cmp(&b).unwrap());
-
-        nearest_intersection.map_or_else(
-            || {
-                let a = 0.5 * (ray.direction.inner().y + 1.0);
-
-                Color([0.2, 0.2, 0.8]) * (1.0 - a) + Color([1.; 3]) * a
-            },
-            |(_, hit_point, normal, shape_material_index)| {
-                let shape_material = &materials[shape_material_index as usize];
-
-                match shape_material.scatter(ray, normal, hit_point) {
-                    Scatter::Scattered(ray, attenuation) => {
-                        // calculate color of scattered ray and mix it with the current color
-                        attenuation
-                            * self.ray_color(&ray, remaining_depth - 1, materials, bvh_stack) // TODO: see if just multiplying the colors is right
-                    }
-                    Scatter::Absorbed => Color([0.; 3]),
-                    Scatter::Light(color) => color,
-                }
-            },
-        )
+        current_color.unwrap_or(Color([0.; 3]))
     }
 }
 
