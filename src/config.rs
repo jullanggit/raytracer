@@ -5,7 +5,7 @@ use crate::{
     bvh::BvhNode,
     material::{ColorKind, Material},
     obj,
-    shapes::Triangle,
+    shapes::{NormalsTextureCoordinates, Triangle},
     vec3::Vec3,
 };
 
@@ -22,6 +22,7 @@ pub fn parse(string: &str) -> Scene {
     let mut triangles = None;
     let mut normals = Vec::new();
     let mut texture_coordinates = Vec::new();
+    let mut barycentric_precomputed = Vec::new();
     let mut materials = Vec::new();
 
     // parse
@@ -77,9 +78,8 @@ pub fn parse(string: &str) -> Scene {
                         values.next().unwrap().into(),
                         values.next().unwrap().into(),
                         values.next().unwrap().into(),
-                        None,
+                        NormalsTextureCoordinates::None,
                         push_material_with_values(values, &mut materials),
-                        None,
                     )
                 }));
             }
@@ -92,6 +92,7 @@ pub fn parse(string: &str) -> Scene {
                         &mut materials,
                         &mut texture_coordinates,
                         &mut normals,
+                        &mut barycentric_precomputed,
                     )
                 }) {
                     triangles.append(&mut new_triangles);
@@ -108,6 +109,7 @@ pub fn parse(string: &str) -> Scene {
     let mut triangles = triangles.unwrap().into_boxed_slice();
     let normals = normals.into_boxed_slice();
     let texture_coordinates = texture_coordinates.into_boxed_slice();
+    let barycentric_precomputed = barycentric_precomputed.into_boxed_slice();
 
     if let Some(amount) = incremental {
         assert!(amount != 0);
@@ -123,7 +125,14 @@ pub fn parse(string: &str) -> Scene {
             BvhNode::new(&mut planes).into_boxed_slice(),
             BvhNode::new(&mut triangles).into_boxed_slice(),
         ),
-        Shapes::new(spheres, planes, triangles, normals, texture_coordinates),
+        Shapes::new(
+            spheres,
+            planes,
+            triangles,
+            normals,
+            texture_coordinates,
+            barycentric_precomputed,
+        ),
         materials,
     )
 }

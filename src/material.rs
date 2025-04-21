@@ -1,9 +1,4 @@
-use std::{
-    array, fs,
-    io::BufRead,
-    mem::{Assume, TransmuteFrom, transmute},
-    ops::Neg as _,
-};
+use std::{fs, ops::Neg as _};
 
 use crate::{
     Color, Ray, rng,
@@ -169,7 +164,7 @@ impl ColorKind {
             .into_iter()
             .skip(base + 4)
             .array_chunks()
-            .map(|bytes| Color(bytes))
+            .map(Color)
             .collect();
 
         assert_eq!(data.len() as u32, width * height);

@@ -179,27 +179,23 @@ pub struct Triangle {
     e1: Vec3,
     /// The edge from a to c
     e2: Vec3,
-    normals_index: Option<u32>,
+    normals_texture_coordinates: NormalsTextureCoordinates,
     material_index: u16,
-    /// only used with texture material
-    texture_coordinates_index: Option<u32>,
 }
 impl Triangle {
     pub fn new(
         a: Vec3,
         b: Vec3,
         c: Vec3,
-        normals_index: Option<u32>,
+        normals_texture_coordinates: NormalsTextureCoordinates,
         material_index: u16,
-        texture_coordinates_index: Option<u32>,
     ) -> Self {
         Self {
             a,
             e1: b - a,
             e2: c - a,
-            normals_index,
+            normals_texture_coordinates,
             material_index,
-            texture_coordinates_index,
         }
     }
     fn barycentric_coordinates(
@@ -255,23 +251,72 @@ impl Intersects for Triangle {
 }
 impl Shape for Triangle {
     #[inline(always)]
+    #[expect(clippy::wildcard_enum_match_arm)]
     fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
+        use NormalsTextureCoordinates::{Both, None, Normals, TextureCoordinates};
+
+        let default_normal = || self.e1.cross(self.e2).normalize();
+
+        let scene = SCENE.get().unwrap();
+        let barycentric_coordinates = match self.normals_texture_coordinates {
+            Both {
+                barycentric_precomputed_index,
+                ..
+            }
+            | Normals {
+                barycentric_precomputed_index,
+                ..
+            }
+            | TextureCoordinates {
+                barycentric_precomputed_index,
+                ..
+            } => self.barycentric_coordinates(
+                point,
+                scene.shapes.barycentric_precomputed[barycentric_precomputed_index as usize],
+            ),
+            None => return (default_normal(), Default::default()), // triangles with textures should also have texture coordinates
+        };
+
         let scene = SCENE.get().unwrap();
 
-        self.normals_index.map_or_else(
-            || self.e1.cross(self.e2).normalize(),
-            |index| {
-                let (normals, precomputed) = scene.shapes.vertex_normals[index as usize];
-
-                let barycentric_coordinates = self.barycentric_coordinates(point, precomputed);
+        let normal = match self.normals_texture_coordinates {
+            Both { normals_index, .. } | Normals { normals_index, .. } => {
+                let normals = scene.shapes.vertex_normals[normals_index as usize];
 
                 let weighted_normals: [_; 3] = array::from_fn(|index| {
                     *normals[index].inner() * barycentric_coordinates[index]
                 });
 
                 (weighted_normals[0] + weighted_normals[1] + weighted_normals[2]).normalize()
-            },
-        )
+            }
+            _ => default_normal(),
+        };
+        let texture_coordinates = match self.normals_texture_coordinates {
+            Both {
+                texture_coordinates_index,
+                ..
+            }
+            | TextureCoordinates {
+                texture_coordinates_index,
+                ..
+            } => {
+                let texture_coordinates =
+                    scene.shapes.texture_coordinates[texture_coordinates_index as usize];
+
+                let weighted_texture_coordinates: [_; 3] = array::from_fn(|index| {
+                    texture_coordinates[index].map(|e| e * barycentric_coordinates[index])
+                });
+
+                array::from_fn(|index| {
+                    weighted_texture_coordinates[0][index]
+                        + weighted_texture_coordinates[1][index]
+                        + weighted_texture_coordinates[2][index]
+                })
+            }
+            _ => Default::default(),
+        };
+
+        (normal, texture_coordinates)
     }
     fn material_index(&self) -> u16 {
         self.material_index
@@ -294,4 +339,22 @@ impl Shape for Triangle {
 
         self.a.max(b).max(c)
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum NormalsTextureCoordinates {
+    Both {
+        normals_index: u32,
+        texture_coordinates_index: u32,
+        barycentric_precomputed_index: u32,
+    },
+    Normals {
+        normals_index: u32,
+        barycentric_precomputed_index: u32,
+    },
+    TextureCoordinates {
+        texture_coordinates_index: u32,
+        barycentric_precomputed_index: u32,
+    },
+    None,
 }

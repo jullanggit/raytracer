@@ -1,10 +1,10 @@
-use std::{collections::HashMap, fs, str::FromStr};
+use std::{collections::HashMap, fs};
 
 use crate::{
     Color,
     config::push_material,
     material::{ColorKind, Material, MaterialKind},
-    shapes::Triangle,
+    shapes::{NormalsTextureCoordinates, Triangle},
     vec3::{NormalizedVec3, Vec3},
 };
 
@@ -14,7 +14,8 @@ pub fn parse(
     path: &str,
     materials: &mut Vec<Material>,
     texture_coordinates_out: &mut Vec<[[f32; 2]; 3]>,
-    normals_out: &mut Vec<([NormalizedVec3; 3], [f32; 4])>,
+    normals_out: &mut Vec<[NormalizedVec3; 3]>,
+    barycentric_precomputed: &mut Vec<[f32; 4]>,
 ) -> Vec<Triangle> {
     let string = fs::read_to_string(path).expect("Failed to read obj file");
     let lines = string.lines();
@@ -124,34 +125,61 @@ pub fn parse(
                             && let Some(normal2) = normal2
                             && let Some(normal3) = normal3
                         {
-                            let e1 = vertex2 - vertex1;
-                            let e2 = vertex3 - vertex1;
-
-                            let (d00, d01, d11) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
-
                             let normal_index = normals_out.len();
 
-                            normals_out.push((
-                                [
-                                    normal1.normalize(),
-                                    normal2.normalize(),
-                                    normal3.normalize(),
-                                ],
-                                [d00, d01, d11, d00 * d11 - d01.powi(2)],
-                            ));
+                            normals_out.push([
+                                normal1.normalize(),
+                                normal2.normalize(),
+                                normal3.normalize(),
+                            ]);
 
                             #[expect(clippy::cast_possible_truncation)]
                             Some(normal_index as u32)
                         } else {
                             None
                         };
+                        let mut barycentric_precomputed_index = || {
+                            let e1 = vertex2 - vertex1;
+                            let e2 = vertex3 - vertex1;
+
+                            let (d00, d01, d11) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
+
+                            let index = barycentric_precomputed.len();
+
+                            barycentric_precomputed.push([d00, d01, d11, d00 * d11 - d01.powi(2)]);
+
+                            index as u32
+                        };
+                        let normals_texture_coordinates =
+                            match (texture_coordinates_index, normals_index) {
+                                (Some(texture_coordinates_index), Some(normals_index)) => {
+                                    NormalsTextureCoordinates::Both {
+                                        normals_index,
+                                        texture_coordinates_index,
+                                        barycentric_precomputed_index:
+                                            barycentric_precomputed_index(),
+                                    }
+                                }
+                                (Some(texture_coordinates_index), None) => {
+                                    NormalsTextureCoordinates::TextureCoordinates {
+                                        texture_coordinates_index,
+                                        barycentric_precomputed_index:
+                                            barycentric_precomputed_index(),
+                                    }
+                                }
+                                (None, Some(normals_index)) => NormalsTextureCoordinates::Normals {
+                                    normals_index,
+                                    barycentric_precomputed_index: barycentric_precomputed_index(),
+                                },
+                                (None, None) => NormalsTextureCoordinates::None,
+                            };
+
                         Triangle::new(
                             vertex1,
                             vertex2,
                             vertex3,
-                            normals_index,
+                            normals_texture_coordinates,
                             material_index,
-                            texture_coordinates_index,
                         )
                     },
                 )

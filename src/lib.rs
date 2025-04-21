@@ -180,17 +180,19 @@ pub struct Shapes {
     spheres: Box<[Sphere]>,
     planes: Box<[Plane]>,
     triangles: Box<[Triangle]>,
-    /// (normals, [d00, d01, d11, denominator])
-    vertex_normals: Box<[([NormalizedVec3; 3], [f32; 4])]>,
+    vertex_normals: Box<[[NormalizedVec3; 3]]>,
     texture_coordinates: Box<[[[f32; 2]; 3]]>,
+    /// [d00, d01, d11, denominator]
+    barycentric_precomputed: Box<[[f32; 4]]>,
 }
 impl Shapes {
     const fn new(
         spheres: Box<[Sphere]>,
         planes: Box<[Plane]>,
         triangles: Box<[Triangle]>,
-        vertex_normals: Box<[([NormalizedVec3; 3], [f32; 4])]>,
+        vertex_normals: Box<[[NormalizedVec3; 3]]>,
         texture_coordinates: Box<[[[f32; 2]; 3]]>,
+        barycentric_precomputed: Box<[[f32; 4]]>,
     ) -> Self {
         Self {
             spheres,
@@ -198,6 +200,7 @@ impl Shapes {
             triangles,
             vertex_normals,
             texture_coordinates,
+            barycentric_precomputed,
         }
     }
 }
