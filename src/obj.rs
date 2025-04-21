@@ -19,14 +19,21 @@ pub fn parse(
     let string = fs::read_to_string(path).expect("Failed to read obj file");
     let lines = string.lines();
 
+    let parent_path = {
+        let parent_position = path.rfind('/').unwrap();
+        &path[..=parent_position]
+    };
+
+    // Option<(contents, parent_path)>
     let material_file = lines
         .clone()
         .find(|line| line.starts_with("mtllib"))
         .map(|line| {
-            fs::read_to_string(format!("obj/{}", &line[7..])).expect("Failed to read mtl file")
+            fs::read_to_string(format!("{}/{}", parent_path, &line[7..]))
+                .expect("Failed to read mtl file")
         });
 
-    let name_index = parse_materials(materials, material_file.as_deref());
+    let name_index = parse_materials(materials, material_file.as_deref(), parent_path);
 
     let vertices: Vec<Vec3> = lines
         .clone()
@@ -38,7 +45,12 @@ pub fn parse(
         .clone()
         .filter(|line| line.starts_with("vt"))
         .map(|line| {
-            let mut iter = line[3..].trim().split(' ').map(|str| str.parse().unwrap());
+            let mut iter = line[3..]
+                .trim()
+                .split(' ')
+                .map(|str| str.parse().unwrap())
+                // tile
+                .map(|e: f32| e.fract().rem_euclid(1.));
             let texture_coordinates = [iter.next().unwrap(), iter.next().unwrap()];
 
             if iter.next().is_some_and(|value| value != 0.) {
@@ -192,6 +204,7 @@ pub fn parse(
 fn parse_materials<'a>(
     materials: &mut Vec<Material>,
     material_file: Option<&'a str>,
+    parent_path: &str,
 ) -> HashMap<&'a str, u16> {
     let mut name_index = HashMap::new();
     if let Some(material_file) = material_file {
@@ -208,7 +221,7 @@ fn parse_materials<'a>(
 
             let diffuse_texture = lines.find(|line| line.starts_with("map_Kd")).map(|line| {
                 let file_name = &line[7..];
-                ColorKind::texture_from_ppm_p6(&format!("obj/{file_name}"))
+                ColorKind::texture_from_ppm_p6(&format!("{parent_path}/{file_name}"))
             });
 
             let material = Material::new(
