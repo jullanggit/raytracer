@@ -56,15 +56,14 @@ pub fn parse(
 
     let mut triangles = Vec::new();
 
-    // skip(1): first object is after the first o
-    for object in string.split("\no ").skip(1) {
-        let lines = object.lines();
+    for object in string.split("usemtl ") {
+        let mut lines = object.lines();
 
         // either the material specified with usemtl or the default one
         let material_index = lines
-            .clone()
-            .find(|line| line.starts_with("usemtl"))
-            .map_or_else(
+            .next()
+            .and_then(|line| name_index.get(line).copied())
+            .unwrap_or_else(
                 // default material
                 || {
                     push_material(
@@ -73,7 +72,6 @@ pub fn parse(
                     )
                 },
                 // usemtl
-                |line| *name_index.get(&line[7..]).expect("Undefined material"),
             );
 
         lines
@@ -113,7 +111,7 @@ pub fn parse(
                             && let Some(tc2) = tc2
                             && let Some(tc3) = tc3
                         {
-                            let index = texture_coordinates.len();
+                            let index = texture_coordinates_out.len();
                             texture_coordinates_out.push([tc1, tc2, tc3]);
                             Some(index.try_into().unwrap())
                         } else {
@@ -204,12 +202,13 @@ fn parse_materials<'a>(
             let name = lines.next().unwrap();
 
             let diffuse_color = lines
+                .clone()
                 .find(|line| line.starts_with("Kd"))
                 .map(|line| Color::from(&line[3..]));
 
             let diffuse_texture = lines.find(|line| line.starts_with("map_Kd")).map(|line| {
-                let file_name = &line[6..];
-                ColorKind::texture_from_ppm_p6(file_name)
+                let file_name = &line[7..];
+                ColorKind::texture_from_ppm_p6(&format!("obj/{file_name}"))
             });
 
             let material = Material::new(

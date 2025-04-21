@@ -277,8 +277,6 @@ impl Shape for Triangle {
             None => return (default_normal(), Default::default()), // triangles with textures should also have texture coordinates
         };
 
-        let scene = SCENE.get().unwrap();
-
         let normal = match self.normals_texture_coordinates {
             Both { normals_index, .. } | Normals { normals_index, .. } => {
                 let normals = scene.shapes.vertex_normals[normals_index as usize];

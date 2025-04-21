@@ -184,6 +184,7 @@ impl ColorKind {
         );
 
         let [x, y] = coords;
+        let y = 1. - y;
         match *self {
             Self::Solid(color) => color,
             // bilinear interpolation
@@ -194,7 +195,7 @@ impl ColorKind {
             } => {
                 let [(x0, x1, dx), (y0, y1, dy)] = [(x, width), (y, height)].map(|(e, max)| {
                     // scale e
-                    let e = e * width as f32;
+                    let e = e * (max - 1) as f32;
 
                     let e0f = e.floor();
 

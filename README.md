@@ -4,6 +4,7 @@ A zero-dependency raytracer, following https://matklad.github.io/2022/12/31/rayt
 - Spheres, Planes & Triangles
 - Obj file loading
 - Vertex normals for smooth surfaces
+- Diffuse Textures (in ppm format)
 - Lambertain, Metal & Glass materials
 - Custom scene description
 - Bounding Volume Hierarchies
@@ -12,3 +13,4 @@ A zero-dependency raytracer, following https://matklad.github.io/2022/12/31/rayt
 
 ## Usage
 - if you dont want to pay the price for expensive normal calculations, remove all vn lines from the .obj file
+- make sure that
