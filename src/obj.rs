@@ -8,7 +8,6 @@ use crate::{
     vec3::{NormalizedVec3, Vec3},
 };
 
-#[expect(clippy::type_complexity)]
 #[inline(always)]
 pub fn parse(
     path: &str,
@@ -43,7 +42,7 @@ pub fn parse(
             let texture_coordinates = [iter.next().unwrap(), iter.next().unwrap()];
 
             if iter.next().is_some_and(|value| value != 0.) {
-                eprintln!("Warning: only 2d texture coordinates are currently supported")
+                eprintln!("Warning: only 2d texture coordinates are currently supported");
             }
             texture_coordinates
         })
@@ -116,7 +115,7 @@ pub fn parse(
                         {
                             let index = texture_coordinates.len();
                             texture_coordinates_out.push([tc1, tc2, tc3]);
-                            Some(index as u32)
+                            Some(index.try_into().unwrap())
                         } else {
                             None
                         };
@@ -148,7 +147,7 @@ pub fn parse(
 
                             barycentric_precomputed.push([d00, d01, d11, d00 * d11 - d01.powi(2)]);
 
-                            index as u32
+                            index.try_into().unwrap()
                         };
                         let normals_texture_coordinates =
                             match (texture_coordinates_index, normals_index) {

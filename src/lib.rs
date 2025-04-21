@@ -172,7 +172,7 @@ pub struct Scene {
     camera: Camera,
     shapes: Shapes,
     bvhs: Bvhs,
-    materials: Vec<Material>,
+    pub materials: Vec<Material>,
 }
 
 #[derive(Debug)]

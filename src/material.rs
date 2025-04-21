@@ -167,7 +167,7 @@ impl ColorKind {
             .map(Color)
             .collect();
 
-        assert_eq!(data.len() as u32, width * height);
+        assert_eq!(data.len(), width as usize * height as usize);
 
         Self::Texture {
             width,
@@ -176,38 +176,48 @@ impl ColorKind {
         }
     }
     /// x & y: 0..=1
-    pub fn sample(&self, [x, y]: [f32; 2]) -> Color<f32> {
-        match self {
-            ColorKind::Solid(color) => *color,
+    #[expect(clippy::cast_precision_loss)]
+    pub fn sample(&self, coords: [f32; 2]) -> Color<f32> {
+        debug_assert!(
+            coords.map(|e| (0.0..=1.).contains(&e)) == [true; 2],
+            "{coords:?}"
+        );
+
+        let [x, y] = coords;
+        match *self {
+            Self::Solid(color) => color,
             // bilinear interpolation
-            ColorKind::Texture {
+            Self::Texture {
                 width,
                 height,
-                data,
+                ref data,
             } => {
                 let [(x0, x1, dx), (y0, y1, dy)] = [(x, width), (y, height)].map(|(e, max)| {
                     // scale e
-                    let e = e * *width as f32;
+                    let e = e * width as f32;
 
                     let e0f = e.floor();
 
                     // get pixels
+                    // we check for valid range in debug mode
+                    #[expect(clippy::cast_sign_loss)]
+                    #[expect(clippy::cast_possible_truncation)]
                     let e0 = e0f as usize;
-                    let e1 = (e0 + 1).min(*max as usize - 1); // clamp to image space
+                    let e1 = (e0 + 1).min(max as usize - 1); // clamp to image space
 
                     // distance
-                    let de = e - e0f as f32;
+                    let de = e - e0f;
 
                     (e0, e1, de)
                 });
 
                 let [c00, c01, c10, c11] = [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]
-                    .map(|[x, y]| Color::<f32>::from(data[x + y * *width as usize]));
+                    .map(|[x, y]| Color::<f32>::from(data[x + y * width as usize]));
 
                 let c0 = c00.lerp(c10, dx);
                 let c1 = c01.lerp(c11, dx);
 
-                c0.lerp(c1, dy).into()
+                c0.lerp(c1, dy)
             }
         }
     }
