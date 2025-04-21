@@ -1,8 +1,12 @@
 use std::str::Split;
 
 use crate::{
-    Bvhs, Camera, Plane, Scene, Screen, Shapes, Sphere, bvh::BvhNode, material::Material, obj,
-    shapes::Triangle, vec3::Vec3,
+    Bvhs, Camera, Plane, Scene, Screen, Shapes, Sphere,
+    bvh::BvhNode,
+    material::{ColorKind, Material},
+    obj,
+    shapes::Triangle,
+    vec3::Vec3,
 };
 
 #[expect(clippy::too_many_lines)]
@@ -123,7 +127,10 @@ pub fn parse(string: &str) -> Scene {
 
 fn push_material_with_values(values: &mut Split<&str>, materials: &mut Vec<Material>) -> u16 {
     push_material(
-        Material::new(values.next().unwrap().into(), values.next().unwrap().into()),
+        Material::new(
+            values.next().unwrap().into(),
+            ColorKind::Solid(values.next().unwrap().into()),
+        ),
         materials,
     )
 }

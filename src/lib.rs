@@ -78,6 +78,9 @@ impl Color<f32> {
         // gamma 2 correction
         Self(self.0.map(f32::sqrt))
     }
+    fn lerp(self, other: Self, t: f32) -> Self {
+        Self(array::from_fn(|i| self.0[i] * (1. - t) + other.0[i] * t))
+    }
 }
 
 impl Color<u8> {

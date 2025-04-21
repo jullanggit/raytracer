@@ -8,12 +8,12 @@ use crate::{
 #[derive(Debug, PartialEq)]
 pub struct Material {
     kind: MaterialKind,
-    color: Color<f32>,
+    color_kind: ColorKind,
 }
 
 impl Material {
-    pub const fn new(kind: MaterialKind, color: Color<f32>) -> Self {
-        Self { kind, color }
+    pub const fn new(kind: MaterialKind, color_kind: ColorKind) -> Self {
+        Self { kind, color_kind }
     }
 
     /// Returns the scattered ray, if it wasn't absorbed or the light color
@@ -34,7 +34,7 @@ impl Material {
                             direction
                         },
                     ),
-                    self.color,
+                    &self.color_kind,
                 )
             }
             MaterialKind::Metal { fuzziness } => {
@@ -42,7 +42,7 @@ impl Material {
                 let direction = ray.direction.reflect(normal);
 
                 if fuzziness == 0.0 {
-                    Scatter::Scattered(Ray::new(hit_point, direction), self.color)
+                    Scatter::Scattered(Ray::new(hit_point, direction), &self.color_kind)
                 } else {
                     // add fuzziness
                     let direction =
@@ -50,7 +50,7 @@ impl Material {
 
                     // Return None if the ray would end up in the object
                     if direction.dot(normal) > 0. {
-                        Scatter::Scattered(Ray::new(hit_point, direction), self.color)
+                        Scatter::Scattered(Ray::new(hit_point, direction), &self.color_kind)
                     } else {
                         Scatter::Absorbed
                     }
@@ -85,17 +85,17 @@ impl Material {
                     NormalizedVec3::new(perpendicular + parallel)
                 };
 
-                Scatter::Scattered(Ray::new(hit_point, direction), Color([1.; 3]))
+                Scatter::Scattered(Ray::new(hit_point, direction), &self.color_kind)
             }
-            MaterialKind::Light => Scatter::Light(self.color),
+            MaterialKind::Light => Scatter::Light(&self.color_kind),
         }
     }
 }
 
-pub enum Scatter {
+pub enum Scatter<'a> {
     Absorbed,
-    Scattered(Ray, Color<f32>),
-    Light(Color<f32>),
+    Scattered(Ray, &'a ColorKind),
+    Light(&'a ColorKind),
 }
 
 #[derive(Debug, PartialEq)]
@@ -121,6 +121,54 @@ impl From<&str> for MaterialKind {
             },
             "light" => Self::Light,
             other => panic!("Unknown material: {other}"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ColorKind {
+    Solid(Color<f32>),
+    Texture {
+        width: u32,
+        height: u32,
+        data: Box<[Color<u8>]>,
+    },
+}
+impl ColorKind {
+    /// x & y: 0..=1
+    pub fn sample(&self, x: f32, y: f32) -> Color<f32> {
+        match self {
+            ColorKind::Solid(color) => *color,
+            // bilinear interpolation
+            ColorKind::Texture {
+                width,
+                height,
+                data,
+            } => {
+                let [(x0, x1, dx), (y0, y1, dy)] = [(x, width), (y, height)].map(|(e, max)| {
+                    // scale e
+                    let e = e * *width as f32;
+
+                    let e0f = e.floor();
+
+                    // get pixels
+                    let e0 = e0f as usize;
+                    let e1 = (e0 + 1).min(*max as usize - 1); // clamp to image space
+
+                    // distance
+                    let de = e - e0f as f32;
+
+                    (e0, e1, de)
+                });
+
+                let [c00, c01, c10, c11] = [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]
+                    .map(|[x, y]| Color::<f32>::from(data[x + y * *width as usize]));
+
+                let c0 = c00.lerp(c10, dx);
+                let c1 = c01.lerp(c11, dx);
+
+                c0.lerp(c1, dy).into()
+            }
         }
     }
 }
