@@ -1,4 +1,9 @@
-use std::ops::Neg as _;
+use std::{
+    array, fs,
+    io::BufRead,
+    mem::{Assume, TransmuteFrom, transmute},
+    ops::Neg as _,
+};
 
 use crate::{
     Color, Ray, rng,
@@ -135,6 +140,46 @@ pub enum ColorKind {
     },
 }
 impl ColorKind {
+    pub fn texture_from_ppm_p6(file: &str) -> Self {
+        let contents = fs::read(file).unwrap();
+
+        assert_eq!(&contents[0..2], b"P6");
+
+        let mut base = 3;
+        let [width, height] = [b' ', b'\n'].map(|pat| {
+            let length = contents[base..]
+                .iter()
+                .take_while(|&&byte| byte != pat)
+                .count();
+
+            let num = str::from_utf8(&contents[base..base + length])
+                .unwrap()
+                .parse()
+                .unwrap();
+
+            base += length + 1;
+
+            num
+        });
+
+        assert_eq!(&contents[base..base + 3], b"255");
+
+        // could be done with reinterpretation, but this is not performance critical
+        let data: Box<[Color<u8>]> = contents
+            .into_iter()
+            .skip(base + 4)
+            .array_chunks()
+            .map(|bytes| Color(bytes))
+            .collect();
+
+        assert_eq!(data.len() as u32, width * height);
+
+        Self::Texture {
+            width,
+            height,
+            data,
+        }
+    }
     /// x & y: 0..=1
     pub fn sample(&self, x: f32, y: f32) -> Color<f32> {
         match self {

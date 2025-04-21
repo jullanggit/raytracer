@@ -8,6 +8,7 @@
 #![feature(iter_partition_in_place)]
 #![feature(new_range_api)]
 #![feature(substr_range)]
+#![feature(iter_array_chunks)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 #![allow(clippy::similar_names)]
