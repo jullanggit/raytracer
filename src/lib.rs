@@ -182,6 +182,7 @@ pub struct Shapes {
     triangles: Box<[Triangle]>,
     /// (normals, [d00, d01, d11, denominator])
     vertex_normals: Box<[([NormalizedVec3; 3], [f32; 4])]>,
+    texture_coordinates: Box<[[[f32; 2]; 3]]>,
 }
 impl Shapes {
     const fn new(
@@ -189,12 +190,14 @@ impl Shapes {
         planes: Box<[Plane]>,
         triangles: Box<[Triangle]>,
         vertex_normals: Box<[([NormalizedVec3; 3], [f32; 4])]>,
+        texture_coordinates: Box<[[[f32; 2]; 3]]>,
     ) -> Self {
         Self {
             spheres,
             planes,
             triangles,
             vertex_normals,
+            texture_coordinates,
         }
     }
 }
@@ -409,13 +412,14 @@ impl Scene {
                     break;
                 }
                 // scattter
-                Some((_, hit_point, normal, shape_material_index)) => {
+                Some((_, hit_point, (normal, texture_coordinates), shape_material_index)) => {
                     let shape_material = &materials[shape_material_index as usize];
 
                     match shape_material.scatter(&current_ray, normal, hit_point) {
-                        Scatter::Scattered(ray, attenuation) => {
+                        Scatter::Scattered(ray, color) => {
                             // calculate color of scattered ray and mix it with the current color
-                            *current_color.get_or_insert(Color([1.; 3])) *= attenuation;
+                            *current_color.get_or_insert(Color([1.; 3])) *=
+                                color.sample(texture_coordinates);
 
                             current_ray = ray;
                         }
@@ -424,7 +428,8 @@ impl Scene {
                             break;
                         }
                         Scatter::Light(color) => {
-                            *current_color.get_or_insert(Color([1.; 3])) *= color;
+                            *current_color.get_or_insert(Color([1.; 3])) *=
+                                color.sample(texture_coordinates);
                             break;
                         }
                     }

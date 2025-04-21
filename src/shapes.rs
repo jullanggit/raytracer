@@ -1,4 +1,11 @@
-use std::{array, f32, fmt::Debug};
+use std::{
+    array,
+    f32::{
+        self,
+        consts::{PI, TAU},
+    },
+    fmt::Debug,
+};
 
 use crate::{
     Ray, SCENE,
@@ -15,7 +22,7 @@ pub trait Intersects {
 
 pub trait Shape: Intersects + Debug {
     /// Calculates the normal of a point on the shape's surface
-    fn normal(&self, point: &Vec3) -> NormalizedVec3;
+    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]);
 
     fn material_index(&self) -> u16;
 
@@ -75,8 +82,15 @@ impl Intersects for Sphere {
     }
 }
 impl Shape for Sphere {
-    fn normal(&self, point: &Vec3) -> NormalizedVec3 {
-        (*point - self.center).normalize()
+    // uses spherical mapping for texture coordinates
+    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
+        (
+            (*point - self.center).normalize(),
+            [
+                0.5 + point.z.atan2(point.x) / TAU,
+                0.5 - point.y.asin() / PI,
+            ],
+        )
     }
 
     fn material_index(&self) -> u16 {
@@ -131,8 +145,14 @@ impl Intersects for Plane {
     }
 }
 impl Shape for Plane {
-    fn normal(&self, _point: &Vec3) -> NormalizedVec3 {
-        self.normal // The normal of a plane is the same at all points on it
+    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
+        let delta = *point - self.point;
+        (
+            // The normal of a plane is the same at all points on it
+            self.normal,
+            // tile after 5 units
+            [delta.x % 5., delta.y % 5.],
+        )
     }
 
     fn material_index(&self) -> u16 {
@@ -159,17 +179,27 @@ pub struct Triangle {
     e1: Vec3,
     /// The edge from a to c
     e2: Vec3,
-    normals: Option<u32>,
+    normals_index: Option<u32>,
     material_index: u16,
+    /// only used with texture material
+    texture_coordinates_index: Option<u32>,
 }
 impl Triangle {
-    pub fn new(a: Vec3, b: Vec3, c: Vec3, normals: Option<u32>, material_index: u16) -> Self {
+    pub fn new(
+        a: Vec3,
+        b: Vec3,
+        c: Vec3,
+        normals_index: Option<u32>,
+        material_index: u16,
+        texture_coordinates_index: Option<u32>,
+    ) -> Self {
         Self {
             a,
             e1: b - a,
             e2: c - a,
-            normals,
+            normals_index,
             material_index,
+            texture_coordinates_index,
         }
     }
     fn barycentric_coordinates(
@@ -225,12 +255,13 @@ impl Intersects for Triangle {
 }
 impl Shape for Triangle {
     #[inline(always)]
-    fn normal(&self, point: &Vec3) -> NormalizedVec3 {
-        self.normals.map_or_else(
+    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
+        let scene = SCENE.get().unwrap();
+
+        self.normals_index.map_or_else(
             || self.e1.cross(self.e2).normalize(),
             |index| {
-                let (normals, precomputed) =
-                    SCENE.get().unwrap().shapes.vertex_normals[index as usize];
+                let (normals, precomputed) = scene.shapes.vertex_normals[index as usize];
 
                 let barycentric_coordinates = self.barycentric_coordinates(point, precomputed);
 

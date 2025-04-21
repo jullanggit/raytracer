@@ -181,7 +181,7 @@ impl ColorKind {
         }
     }
     /// x & y: 0..=1
-    pub fn sample(&self, x: f32, y: f32) -> Color<f32> {
+    pub fn sample(&self, [x, y]: [f32; 2]) -> Color<f32> {
         match self {
             ColorKind::Solid(color) => *color,
             // bilinear interpolation

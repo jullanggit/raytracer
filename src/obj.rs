@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, str::FromStr};
 
 use crate::{
     Color,
@@ -13,7 +13,9 @@ use crate::{
 pub fn parse(
     path: &str,
     materials: &mut Vec<Material>,
-) -> (Vec<Triangle>, Vec<([NormalizedVec3; 3], [f32; 4])>) {
+    texture_coordinates_out: &mut Vec<[[f32; 2]; 3]>,
+    normals_out: &mut Vec<([NormalizedVec3; 3], [f32; 4])>,
+) -> Vec<Triangle> {
     let string = fs::read_to_string(path).expect("Failed to read obj file");
     let lines = string.lines();
 
@@ -32,13 +34,25 @@ pub fn parse(
         .map(|line| line[2..].trim().into())
         .collect();
 
+    let texture_coordinates: Vec<[f32; 2]> = lines
+        .clone()
+        .filter(|line| line.starts_with("vt"))
+        .map(|line| {
+            let mut iter = line[3..].trim().split(' ').map(|str| str.parse().unwrap());
+            let texture_coordinates = [iter.next().unwrap(), iter.next().unwrap()];
+
+            if iter.next().is_some_and(|value| value != 0.) {
+                eprintln!("Warning: only 2d texture coordinates are currently supported")
+            }
+            texture_coordinates
+        })
+        .collect();
+
     let normals: Vec<Vec3> = lines
         .clone()
         .filter(|line| line.starts_with("vn"))
-        .map(|line| line[2..].trim().into())
+        .map(|line| line[3..].trim().into())
         .collect();
-
-    let mut normals_out = Vec::new();
 
     let mut triangles = Vec::new();
 
@@ -47,7 +61,7 @@ pub fn parse(
         let lines = object.lines();
 
         // either the material specified with usemtl or the default one
-        let index = lines
+        let material_index = lines
             .clone()
             .find(|line| line.starts_with("usemtl"))
             .map_or_else(
@@ -67,72 +81,85 @@ pub fn parse(
             .for_each(|line| {
                 // get vertices and normals
                 let mut iter = line[1..].split_whitespace().map(|part| {
-                    let mut parts = part.splitn(3, '/');
+                    // (vertex, texture, normal)
+                    let mut indices = part
+                        .split('/')
+                        .zip([vertices.len(), texture_coordinates.len(), normals.len()])
+                        .map(|(str_index, len)| {
+                            let index: isize = str_index.parse().unwrap();
 
-                    let vertex_index: usize = {
-                        let index: isize = parts.next().unwrap().parse().unwrap();
-
-                        #[expect(clippy::cast_sign_loss)] // we check for negative index
-                        if index < 0 {
-                            vertices.len() - index.unsigned_abs()
-                        } else {
-                            index as usize - 1
-                        }
-                    };
-                    parts.next(); // skip texture
-                    let mut normal_index = || {
-                        let index: isize = parts.next()?.parse().ok()?;
-
-                        #[expect(clippy::cast_sign_loss)] // we check for negative index
-                        Some(if index < 0 {
-                            normals.len() - index.unsigned_abs()
-                        } else {
-                            index as usize - 1
-                        })
-                    };
-
+                            #[expect(clippy::cast_sign_loss)] // we check for negative index
+                            if index < 0 {
+                                len - index.unsigned_abs()
+                            } else {
+                                index as usize - 1
+                            }
+                        });
                     (
-                        vertices[vertex_index],
-                        normal_index().and_then(|index| normals.get(index)),
+                        vertices[indices.next().unwrap()],
+                        indices.next().map(|index| texture_coordinates[index]),
+                        indices.next().map(|index| normals[index]),
                     )
                 });
 
-                let (vertex1, normal1) = iter.next().unwrap();
+                let (vertex1, tc1, normal1) = iter.next().unwrap();
 
                 // Fan triangulation
                 // TODO: maybe use a better approach
-                iter.map_windows(|&[(vertex2, normal2), (vertex3, normal3)]: &[_; 2]| {
-                    if let Some(normal1) = normal1
-                        && let Some(normal2) = normal2
-                        && let Some(normal3) = normal3
-                    {
-                        let e1 = vertex2 - vertex1;
-                        let e2 = vertex3 - vertex1;
+                iter.map_windows(
+                    |&[(vertex2, tc2, normal2), (vertex3, tc3, normal3)]: &[_; 2]| {
+                        // has texture coordinates
+                        let texture_coordinates_index = if let Some(tc1) = tc1
+                            && let Some(tc2) = tc2
+                            && let Some(tc3) = tc3
+                        {
+                            let index = texture_coordinates.len();
+                            texture_coordinates_out.push([tc1, tc2, tc3]);
+                            Some(index as u32)
+                        } else {
+                            None
+                        };
+                        // has vertex normals
+                        let normals_index = if let Some(normal1) = normal1
+                            && let Some(normal2) = normal2
+                            && let Some(normal3) = normal3
+                        {
+                            let e1 = vertex2 - vertex1;
+                            let e2 = vertex3 - vertex1;
 
-                        let (d00, d01, d11) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
+                            let (d00, d01, d11) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
 
-                        let normal_index = normals_out.len();
+                            let normal_index = normals_out.len();
 
-                        normals_out.push((
-                            [
-                                normal1.normalize(),
-                                normal2.normalize(),
-                                normal3.normalize(),
-                            ],
-                            [d00, d01, d11, d00 * d11 - d01.powi(2)],
-                        ));
+                            normals_out.push((
+                                [
+                                    normal1.normalize(),
+                                    normal2.normalize(),
+                                    normal3.normalize(),
+                                ],
+                                [d00, d01, d11, d00 * d11 - d01.powi(2)],
+                            ));
 
-                        #[expect(clippy::cast_possible_truncation)]
-                        Triangle::new(vertex1, vertex2, vertex3, Some(normal_index as u32), index)
-                    } else {
-                        Triangle::new(vertex1, vertex2, vertex3, None, index)
-                    }
-                })
+                            #[expect(clippy::cast_possible_truncation)]
+                            Some(normal_index as u32)
+                        } else {
+                            None
+                        };
+                        Triangle::new(
+                            vertex1,
+                            vertex2,
+                            vertex3,
+                            normals_index,
+                            material_index,
+                            texture_coordinates_index,
+                        )
+                    },
+                )
                 .collect_into(&mut triangles);
             });
     }
 
-    (triangles, normals_out)
+    triangles
 }
 
 /// Returns a `HashMap` of (material name -> material index)

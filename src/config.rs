@@ -20,7 +20,8 @@ pub fn parse(string: &str) -> Scene {
     let mut spheres = None;
     let mut planes = None;
     let mut triangles = None;
-    let mut normals = None;
+    let mut normals = Vec::new();
+    let mut texture_coordinates = Vec::new();
     let mut materials = Vec::new();
 
     // parse
@@ -78,21 +79,22 @@ pub fn parse(string: &str) -> Scene {
                         values.next().unwrap().into(),
                         None,
                         push_material_with_values(values, &mut materials),
+                        None,
                     )
                 }));
             }
             ("obj", value) => {
                 let triangles = triangles.get_or_insert_with(Vec::new);
-                let normals = normals.get_or_insert_with(Vec::new);
 
-                for (mut new_triangles, mut new_normals) in multi_item_parse(value, |value| {
+                for mut new_triangles in multi_item_parse(value, |value| {
                     obj::parse(
                         &format!("obj/{}.obj", value.next().unwrap()),
                         &mut materials,
+                        &mut texture_coordinates,
+                        &mut normals,
                     )
                 }) {
                     triangles.append(&mut new_triangles);
-                    normals.append(&mut new_normals);
                 }
             }
             (other, value) => panic!("Unknown entry {other} with value {value}"),
@@ -104,7 +106,8 @@ pub fn parse(string: &str) -> Scene {
     let mut spheres = spheres.unwrap().into_boxed_slice();
     let mut planes = planes.unwrap().into_boxed_slice();
     let mut triangles = triangles.unwrap().into_boxed_slice();
-    let normals = normals.map_or_else(Box::default, |normals| normals.into_boxed_slice());
+    let normals = normals.into_boxed_slice();
+    let texture_coordinates = texture_coordinates.into_boxed_slice();
 
     if let Some(amount) = incremental {
         assert!(amount != 0);
@@ -120,7 +123,7 @@ pub fn parse(string: &str) -> Scene {
             BvhNode::new(&mut planes).into_boxed_slice(),
             BvhNode::new(&mut triangles).into_boxed_slice(),
         ),
-        Shapes::new(spheres, planes, triangles, normals),
+        Shapes::new(spheres, planes, triangles, normals, texture_coordinates),
         materials,
     )
 }

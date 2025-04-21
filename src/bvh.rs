@@ -197,7 +197,7 @@ impl<T: Shape> BvhNode<T> {
         shapes: &[T],
         nodes: &[Self],
         stack: &mut Vec<(f32, u32)>,
-    ) -> Option<(f32, Vec3, NormalizedVec3, u16)> {
+    ) -> Option<(f32, Vec3, (NormalizedVec3, [f32; 2]), u16)> {
         stack.clear();
 
         let mut closest_hit = (f32::INFINITY, u32::MAX); // distance, shapes_index
@@ -265,7 +265,7 @@ impl<T: Shape> BvhNode<T> {
             (
                 time,
                 hit_point,
-                shapes[index as usize].normal(&hit_point),
+                shapes[index as usize].normal_and_texture_coordinates(&hit_point),
                 shapes[index as usize].material_index(),
             )
         })
