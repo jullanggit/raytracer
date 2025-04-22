@@ -45,12 +45,7 @@ pub fn parse(
         .clone()
         .filter(|line| line.starts_with("vt"))
         .map(|line| {
-            let mut iter = line[3..]
-                .trim()
-                .split(' ')
-                .map(|str| str.parse().unwrap())
-                // tile
-                .map(|e: f32| e.fract().rem_euclid(1.));
+            let mut iter = line[3..].trim().split(' ').map(|str| str.parse().unwrap());
             let texture_coordinates = [iter.next().unwrap(), iter.next().unwrap()];
 
             if iter.next().is_some_and(|value| value != 0.) {

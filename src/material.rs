@@ -178,13 +178,15 @@ impl ColorKind {
     /// x & y: 0..=1
     #[expect(clippy::cast_precision_loss)]
     pub fn sample(&self, coords: [f32; 2]) -> Color<f32> {
+        // tile
+        let [x, y] = coords.map(|e: f32| e.fract().rem_euclid(1.));
+        let y = 1. - y; // flip y-axis
+
         debug_assert!(
             coords.map(|e| (0.0..=1.).contains(&e)) == [true; 2],
             "{coords:?}"
         );
 
-        let [x, y] = coords;
-        let y = 1. - y; // flip y-axis
         match *self {
             Self::Solid(color) => color,
             // bilinear interpolation
