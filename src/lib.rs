@@ -9,6 +9,7 @@
 #![feature(new_range_api)]
 #![feature(substr_range)]
 #![feature(iter_array_chunks)]
+#![feature(generic_arg_infer)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 #![allow(clippy::similar_names)]
@@ -17,6 +18,7 @@
 
 pub mod bvh;
 pub mod config;
+pub mod cpu_affinity;
 pub mod material;
 pub mod obj;
 pub mod rng;
@@ -41,6 +43,7 @@ use std::{
 };
 
 use bvh::BvhNode;
+use cpu_affinity::set_cpu_affinity;
 use material::{Material, Scatter};
 use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3};
@@ -277,9 +280,14 @@ impl Scene {
         let total_work = chunks.len() * num_sample_chunks;
         let work_counter = AtomicUsize::new(0);
 
+        let cpu = AtomicUsize::new(0);
         thread::scope(|scope| {
             for _ in 0..num_threads {
                 scope.spawn(|| {
+                    // set cpu affinity
+                    let cpu = cpu.fetch_add(1, Ordering::Relaxed);
+                    set_cpu_affinity(cpu);
+
                     let mut bvh_stack = Vec::new();
 
                     loop {

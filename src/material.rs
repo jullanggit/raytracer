@@ -184,7 +184,7 @@ impl ColorKind {
         );
 
         let [x, y] = coords;
-        let y = 1. - y;
+        let y = 1. - y; // flip y-axis
         match *self {
             Self::Solid(color) => color,
             // bilinear interpolation
