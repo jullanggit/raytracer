@@ -13,4 +13,3 @@ A zero-dependency raytracer, following https://matklad.github.io/2022/12/31/rayt
 
 ## Usage
 - if you dont want to pay the price for expensive normal calculations, remove all vn lines from the .obj file
-- make sure that
