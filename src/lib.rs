@@ -34,8 +34,6 @@ use std::{
     fs::File,
     io::{Seek as _, Write as _},
     ops::{Add, Div, Mul, MulAssign},
-    os::unix::fs::FileExt as _,
-    slice,
     sync::{
         Mutex, OnceLock,
         atomic::{AtomicUsize, Ordering},
@@ -46,29 +44,31 @@ use std::{
 use bvh::BvhNode;
 use cpu_affinity::set_cpu_affinity;
 use material::{Material, Scatter};
+use mmap::MmapFile;
 use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3};
 
 /// A ppm p6 image
 pub struct Image {
-    file: File,
-    data: Vec<Color<u8>>,
+    file: MmapFile,
 }
 impl Image {
     /// (Self, header end offset)
-    fn new(width: usize, height: usize) -> (Self, u64) {
+    fn new(width: usize, height: usize) -> Self {
         let mut file = File::create("target/out.ppm").unwrap();
         // Write ppm header
         writeln!(&mut file, "P6\n{width} {height} 255").unwrap();
 
-        let data = vec![Color([0; 3]); width * height]; // zero-initialise vec
+        let offset = file.stream_position().unwrap();
 
-        let position = file.stream_position().unwrap();
+        let file = MmapFile::new(&file, width * height * size_of::<Color<u8>>(), offset);
 
-        (Self { file, data }, position)
+        Self { file }
     }
-    pub fn write(&mut self) {
-        self.file.write_all(Color::as_bytes(&self.data)).unwrap();
+    fn data(&mut self) -> &mut [Color<u8>] {
+        // SAFETY:
+        // - All bit patterns are valid Color<u8>'s
+        unsafe { self.file.as_casted_slice_mut() }
     }
 }
 
@@ -85,17 +85,6 @@ impl Color<f32> {
     }
     fn lerp(self, other: Self, t: f32) -> Self {
         Self(array::from_fn(|i| self.0[i] * (1. - t) + other.0[i] * t))
-    }
-}
-
-impl Color<u8> {
-    const fn as_bytes(slice: &[Self]) -> &[u8] {
-        // SAFETY:
-        // - `Self` is a `repr(transparent)` wrapper around [u8;3],
-        // - so `self.data` is effectively a &[[u8;3]]
-        // - [u8;3] and u8 have the same alignment
-        // - We adjust the length of the resulting slice
-        unsafe { slice::from_raw_parts(slice.as_ptr().cast::<u8>(), size_of_val(slice)) }
     }
 }
 
@@ -256,8 +245,8 @@ impl Scene {
         let row_step = self.screen.top_edge / (self.screen.resolution_width - 1) as f32;
         let column_step = self.screen.left_edge / (self.screen.resolution_height - 1) as f32;
 
-        let (mut image, offset) =
-            Image::new(self.screen.resolution_width, self.screen.resolution_height);
+        let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
+        let data = image.data();
 
         let num_threads: usize = available_parallelism().unwrap().into();
 
@@ -265,8 +254,7 @@ impl Scene {
         let chunk_size = (self.screen.resolution_width * self.screen.resolution_height)
             / (num_threads * num_threads);
 
-        let chunks = image
-            .data
+        let chunks = data
             .chunks_mut(chunk_size)
             .map(Mutex::new)
             .collect::<Vec<_>>();
@@ -350,35 +338,10 @@ impl Scene {
                                 chunk[i] = color.color_correct().into();
                             }
                         }
-
-                        if self.incremental.is_some() {
-                            let written = image
-                                .file
-                                .write_at(
-                                    Color::as_bytes(*chunk),
-                                    offset
-                                        + chunk_index as u64
-                                            * chunk_size as u64
-                                            * size_of::<Color<u8>>() as u64,
-                                )
-                                .unwrap();
-
-                            assert!(
-                                written == size_of_val(*chunk),
-                                "written: {written}, chunk len: {}",
-                                chunk.len()
-                            );
-                        }
                     }
                 });
             }
         });
-
-        if self.incremental.is_none() {
-            image.write();
-        }
-
-        image.file.flush().unwrap();
     }
 
     #[inline(always)]

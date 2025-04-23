@@ -28,14 +28,12 @@ unsafe extern "C" {
     fn munmap(add: *mut c_void, len: c_ulong) -> c_int;
 }
 
-struct MmapFile {
+pub struct MmapFile {
     ptr: *mut u8,
     len: usize,
 }
 impl MmapFile {
-    pub fn new(path: &str, len: usize) -> Self {
-        let file = File::create(path).unwrap();
-
+    pub fn new(file: &File, len: usize, offset: u64) -> Self {
         // SAFETY:
         // - addr = ptr::null_mut() -> OS chooses address
         // - prot & flags are valid flags
@@ -47,7 +45,7 @@ impl MmapFile {
                 PROT_READ | PROT_WRITE,
                 MAP_SHARED,
                 file.as_raw_fd(),
-                0,
+                offset.try_into().unwrap(),
             )
         };
 
@@ -67,6 +65,28 @@ impl MmapFile {
         // - ptr is a valid pointer to memory managed by the OS
         // - len is both the length in bytes and the amount of elements
         unsafe { slice::from_raw_parts_mut(self.ptr, self.len) }
+    }
+    /// Casts the memory to T.
+    /// # SAFETY:
+    /// All Data in the mapping must be a valid instance of T.
+    #[expect(clippy::missing_safety_doc)] // clippy doesnt detect
+    pub unsafe fn as_casted_slice_mut<T: Copy>(&mut self) -> &mut [T] {
+        // check alignment
+        assert!(self.ptr as usize % align_of::<T>() == 0);
+
+        let t_size = size_of::<T>();
+        assert!(t_size != 0, "Zero-sized types are not supported");
+
+        // check length
+        assert!(self.len % t_size == 0);
+        #[expect(clippy::integer_division)]
+        let new_len = self.len / t_size;
+
+        // SAFETY:
+        // - alignment and length are checked above
+        // - T is Copy, so it is !Drop
+        // - validity is guaranteed by the caller
+        unsafe { slice::from_raw_parts_mut(self.ptr.cast(), new_len) }
     }
 }
 impl Drop for MmapFile {
