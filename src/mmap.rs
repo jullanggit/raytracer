@@ -40,6 +40,8 @@ impl MmapFile {
             .open(path)
             .unwrap();
 
+        file.set_len(len as u64).unwrap();
+
         // SAFETY:
         // - addr = ptr::null_mut() -> OS chooses address
         // - prot & flags are valid flags
