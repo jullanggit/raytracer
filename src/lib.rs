@@ -20,6 +20,7 @@ pub mod bvh;
 pub mod config;
 pub mod cpu_affinity;
 pub mod material;
+pub mod mmap;
 pub mod obj;
 pub mod rng;
 pub mod shapes;

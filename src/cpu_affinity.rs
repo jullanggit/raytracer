@@ -6,6 +6,11 @@ use std::{
 const CPU_SETSIZE: usize = 1024;
 const NCPUBITS: usize = c_ulong::BITS as usize;
 
+unsafe extern "C" {
+    // int sched_setaffinity (__pid_t __pid, size_t __cpusetsize, const cpu_set_t *__cpuset) __THROW;
+    fn sched_setaffinity(pid_t: c_int, cpusetsize: c_ulong, cpuset: *const cpu_set_t) -> c_int;
+}
+
 #[repr(C)]
 struct cpu_set_t {
     #[expect(clippy::integer_division)]
@@ -23,11 +28,6 @@ impl cpu_set_t {
         // set bit
         self.cpu_mask[array_index] |= 1 << bit_index;
     }
-}
-
-unsafe extern "C" {
-    // int sched_setaffinity (__pid_t __pid, size_t __cpusetsize, const cpu_set_t *__cpuset) __THROW;
-    fn sched_setaffinity(pid_t: c_int, cpusetsize: c_ulong, cpuset: *const cpu_set_t) -> c_int;
 }
 
 pub fn set_cpu_affinity(cpu: usize) {
