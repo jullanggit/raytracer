@@ -1,6 +1,6 @@
 use std::{
     ffi::{c_int, c_long, c_ulong, c_void},
-    fs::File,
+    fs::{File, OpenOptions},
     io::Error,
     os::fd::AsRawFd as _,
     ptr, slice,
@@ -33,7 +33,13 @@ pub struct MmapFile {
     len: usize,
 }
 impl MmapFile {
-    pub fn new(file: &File, len: usize, offset: u64) -> Self {
+    pub fn new(path: &str, len: usize) -> Self {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+
         // SAFETY:
         // - addr = ptr::null_mut() -> OS chooses address
         // - prot & flags are valid flags
@@ -45,7 +51,7 @@ impl MmapFile {
                 PROT_READ | PROT_WRITE,
                 MAP_SHARED,
                 file.as_raw_fd(),
-                offset.try_into().unwrap(),
+                0,
             )
         };
 

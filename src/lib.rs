@@ -51,24 +51,26 @@ use vec3::{NormalizedVec3, Vec3};
 /// A ppm p6 image
 pub struct Image {
     file: MmapFile,
+    header_size: usize,
 }
 impl Image {
-    /// (Self, header end offset)
     fn new(width: usize, height: usize) -> Self {
-        let mut file = File::create("target/out.ppm").unwrap();
-        // Write ppm header
-        writeln!(&mut file, "P6\n{width} {height} 255").unwrap();
+        let mut file = MmapFile::new("target/out.ppm", width * height * size_of::<Color<u8>>());
 
-        let offset = file.stream_position().unwrap();
+        let header = format!("P6\n{width} {height} 255");
+        file.as_slice_mut().write_all(header.as_bytes()).unwrap();
 
-        let file = MmapFile::new(&file, width * height * size_of::<Color<u8>>(), offset);
-
-        Self { file }
+        Self {
+            file,
+            header_size: header.len(),
+        }
     }
     fn data(&mut self) -> &mut [Color<u8>] {
         // SAFETY:
         // - All bit patterns are valid Color<u8>'s
-        unsafe { self.file.as_casted_slice_mut() }
+        let slice = unsafe { self.file.as_casted_slice_mut() };
+        // return slice from after the header
+        &mut slice[self.header_size..]
     }
 }
 
