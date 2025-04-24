@@ -31,8 +31,7 @@ pub static SCENE: OnceLock<Scene> = OnceLock::new();
 use crate::shapes::{Plane, Sphere};
 use std::{
     array,
-    fs::File,
-    io::{Seek as _, Write as _},
+    io::Write as _,
     ops::{Add, Div, Mul, MulAssign},
     sync::{
         Mutex, OnceLock,
@@ -51,26 +50,27 @@ use vec3::{NormalizedVec3, Vec3};
 /// A ppm p6 image
 pub struct Image {
     file: MmapFile,
-    header_size: usize,
+    header_offset: usize,
 }
 impl Image {
     fn new(width: usize, height: usize) -> Self {
-        let mut file = MmapFile::new("target/out.ppm", width * height * size_of::<Color<u8>>());
+        let header = format!("P6\n{width} {height} 255\n");
+        let mut file = MmapFile::new(
+            "target/out.ppm",
+            header.len() + width * height * size_of::<Color<u8>>(),
+        );
 
-        let header = format!("P6\n{width} {height} 255");
         file.as_slice_mut().write_all(header.as_bytes()).unwrap();
 
         Self {
             file,
-            header_size: header.len(),
+            header_offset: header.len(),
         }
     }
     fn data(&mut self) -> &mut [Color<u8>] {
         // SAFETY:
         // - All bit patterns are valid Color<u8>'s
-        let slice = unsafe { self.file.as_casted_slice_mut() };
-        // return slice from after the header
-        &mut slice[self.header_size..]
+        unsafe { self.file.as_casted_slice_mut(self.header_offset) }
     }
 }
 

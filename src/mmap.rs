@@ -1,6 +1,6 @@
 use std::{
     ffi::{c_int, c_long, c_ulong, c_void},
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::Error,
     os::fd::AsRawFd as _,
     ptr, slice,
@@ -37,6 +37,8 @@ impl MmapFile {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
+            .create(true)
+            .truncate(false)
             .open(path)
             .unwrap();
 
@@ -74,27 +76,35 @@ impl MmapFile {
         // - len is both the length in bytes and the amount of elements
         unsafe { slice::from_raw_parts_mut(self.ptr, self.len) }
     }
-    /// Casts the memory to T.
+    /// Casts the memory from byte-offset `offset` onwards to &mut [T].
     /// # SAFETY:
     /// All Data in the mapping must be a valid instance of T.
     #[expect(clippy::missing_safety_doc)] // clippy doesnt detect
-    pub unsafe fn as_casted_slice_mut<T: Copy>(&mut self) -> &mut [T] {
+    pub unsafe fn as_casted_slice_mut<T: Copy>(&mut self, offset: usize) -> &mut [T] {
+        assert!(offset <= self.len);
+
+        // SAFETY:
+        // - due to the check above, ptr is guaranteed to stay within the mapping
+        let ptr = unsafe { self.ptr.add(offset) };
+
+        let len = self.len - offset;
+
         // check alignment
-        assert!(self.ptr as usize % align_of::<T>() == 0);
+        assert!(ptr as usize % align_of::<T>() == 0);
 
         let t_size = size_of::<T>();
         assert!(t_size != 0, "Zero-sized types are not supported");
 
         // check length
-        assert!(self.len % t_size == 0);
+        assert!(len % t_size == 0);
         #[expect(clippy::integer_division)]
-        let new_len = self.len / t_size;
+        let new_len = len / t_size;
 
         // SAFETY:
         // - alignment and length are checked above
         // - T is Copy, so it is !Drop
         // - validity is guaranteed by the caller
-        unsafe { slice::from_raw_parts_mut(self.ptr.cast(), new_len) }
+        unsafe { slice::from_raw_parts_mut(ptr.cast(), new_len) }
     }
 }
 impl Drop for MmapFile {
