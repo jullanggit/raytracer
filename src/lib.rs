@@ -31,7 +31,7 @@ pub static SCENE: OnceLock<Scene> = OnceLock::new();
 use crate::shapes::{Plane, Sphere};
 use std::{
     array,
-    io::Write as _,
+    io::{Write as _, stdout},
     ops::{Add, Div, Mul, MulAssign},
     sync::{
         Mutex, OnceLock,
@@ -163,6 +163,7 @@ impl Ray {
 #[derive(Debug)]
 pub struct Scene {
     incremental: Option<usize>,
+    continue_sampling: Option<usize>,
     screen: Screen,
     camera: Camera,
     shapes: Shapes,
@@ -225,6 +226,7 @@ impl Bvhs {
 impl Scene {
     const fn new(
         incremental: Option<usize>,
+        continue_sampling: Option<usize>,
         screen: Screen,
         camera: Camera,
         bvhs: Bvhs,
@@ -233,6 +235,7 @@ impl Scene {
     ) -> Self {
         Self {
             incremental,
+            continue_sampling,
             screen,
             camera,
             shapes,
@@ -288,8 +291,20 @@ impl Scene {
                         }
 
                         #[expect(clippy::integer_division)]
-                        let sample_iteration = work_index / chunks.len();
+                        let sample_iteration =
+                            (work_index / chunks.len()) + self.continue_sampling.unwrap_or(0);
                         let chunk_index = work_index % chunks.len();
+
+                        // report progress
+                        if chunk_index == chunks.len() - 1 {
+                            print!(
+                                "\rSamples: {}",
+                                self.continue_sampling.unwrap_or(0)
+                                    + (sample_iteration + 1 - self.continue_sampling.unwrap_or(0))
+                                        * sample_chunk_size
+                            );
+                            stdout().flush().unwrap();
+                        }
 
                         let mut chunk = chunks[chunk_index].lock().unwrap();
 
@@ -329,8 +344,8 @@ impl Scene {
                                 .map(|e| e / sample_chunk_size as f32),
                             );
 
-                            if self.incremental.is_some() {
-                                // average with last incremental iteration
+                            if self.incremental.is_some() || self.continue_sampling.is_some() {
+                                // average with last iteration
                                 chunk[i] = ((Color::<f32>::from(chunk[i])
                                     * sample_iteration as f32
                                     + color.color_correct())

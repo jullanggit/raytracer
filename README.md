@@ -11,6 +11,7 @@ A zero-dependency raytracer, following https://matklad.github.io/2022/12/31/rayt
 - Multithreading
 - Memory mapped image
   -> Live preview
+  -> Continue rendering
   -> Infinitely large images
 
 ## Usage

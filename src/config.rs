@@ -15,6 +15,7 @@ pub fn parse(string: &str) -> Scene {
 
     // init values
     let mut incremental = None;
+    let mut continue_sampling = None;
     let mut screen = None;
     let mut camera = None;
     let mut spheres = None;
@@ -35,6 +36,9 @@ pub fn parse(string: &str) -> Scene {
         let next = iter.next().unwrap();
         // split into field and value
         match next[..next.len() - 1].split_once('(').unwrap() {
+            ("continue", value) => {
+                continue_sampling = Some(value.parse().unwrap());
+            }
             ("incremental", value) => {
                 incremental = Some(value.parse().unwrap());
             }
@@ -118,6 +122,7 @@ pub fn parse(string: &str) -> Scene {
 
     Scene::new(
         incremental,
+        continue_sampling,
         screen,
         camera.unwrap(),
         Bvhs::new(
