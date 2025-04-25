@@ -12,6 +12,9 @@ const MAP_FAILED: *mut c_void = usize::MAX as *mut c_void; // (void *) -1
 const MAP_SHARED: c_int = 1;
 const PROT_READ: c_int = 1;
 const PROT_WRITE: c_int = 2;
+const MADV_SEQUENTIAL: c_int = 2;
+const MADV_WILLNEED: c_int = 3;
+const MADV_HUGEPAGE: c_int = 14;
 
 // sys/mman.h
 unsafe extern "C" {
@@ -25,7 +28,9 @@ unsafe extern "C" {
         offset: c_long,
     ) -> *mut c_void;
     // int munmap (void *__addr, size_t __len) __THROW
-    fn munmap(add: *mut c_void, len: c_ulong) -> c_int;
+    fn munmap(addr: *mut c_void, len: c_ulong) -> c_int;
+    // int madvise (void *__addr, size_t __len, int __advice) __THROW;
+    fn madvise(addr: *mut c_void, len: c_ulong, advice: c_int) -> c_int;
 }
 
 pub struct MmapFile {
@@ -33,7 +38,7 @@ pub struct MmapFile {
     len: usize,
 }
 impl MmapFile {
-    pub fn new(path: &str, len: usize) -> Self {
+    pub fn new(path: &str, len: usize, sequential: bool) -> Self {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -64,6 +69,20 @@ impl MmapFile {
             "Error: {}",
             Error::last_os_error()
         );
+
+        // madvise
+        for advice in [MADV_WILLNEED, MADV_HUGEPAGE]
+            .into_iter()
+            .chain(sequential.then_some(MADV_SEQUENTIAL))
+        {
+            // SAFETY:
+            // - advice is a valid madvise advice
+            // - the ptr returned by mmap is page-aligned
+            // - the ptr and length describe a valid, mapped region
+            let ret = unsafe { madvise(ptr, len as u64, advice) };
+
+            assert!(ret == 0, "Error: {}", Error::last_os_error());
+        }
 
         Self {
             ptr: ptr.cast(),

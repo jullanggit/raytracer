@@ -53,11 +53,12 @@ pub struct Image {
     header_offset: usize,
 }
 impl Image {
-    fn new(width: usize, height: usize) -> Self {
+    fn new(width: usize, height: usize, sequential: bool) -> Self {
         let header = format!("P6\n{width} {height} 255\n");
         let mut file = MmapFile::new(
             "target/out.ppm",
             header.len() + width * height * size_of::<Color<u8>>(),
+            sequential,
         );
 
         file.as_slice_mut().write_all(header.as_bytes()).unwrap();
@@ -250,7 +251,12 @@ impl Scene {
         let row_step = self.screen.top_edge / (self.screen.resolution_width - 1) as f32;
         let column_step = self.screen.left_edge / (self.screen.resolution_height - 1) as f32;
 
-        let mut image = Image::new(self.screen.resolution_width, self.screen.resolution_height);
+        let mut image = Image::new(
+            self.screen.resolution_width,
+            self.screen.resolution_height,
+            // only madvise sequential if we only iterate once, as it incentivieses dropping the pages after use
+            self.incremental.is_none(),
+        );
         let data = image.data();
 
         let num_threads: usize = available_parallelism().unwrap().into();
