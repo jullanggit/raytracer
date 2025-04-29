@@ -86,11 +86,6 @@ impl Rng {
     }
 }
 
-/// 0..1
-pub fn f32() -> f32 {
-    with_rng(Rng::f32)
-}
-
 pub fn with_rng<T>(f: impl Fn(&mut Rng) -> T) -> T {
     RNG.with(|rng| {
         let mut current = rng.replace(Rng(0));
@@ -102,3 +97,19 @@ pub fn with_rng<T>(f: impl Fn(&mut Rng) -> T) -> T {
         res
     })
 }
+
+pub trait Random {
+    fn random() -> Self;
+}
+macro_rules! impl_random {
+    ($($Type:ident),*) => {
+        $(
+            impl Random for $Type {
+                fn random() -> Self {
+                    with_rng(Rng::$Type)
+                }
+            }
+        )*
+    };
+}
+impl_random!(f32, u32, u64);

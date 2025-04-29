@@ -10,6 +10,9 @@
 #![feature(substr_range)]
 #![feature(iter_array_chunks)]
 #![feature(generic_arg_infer)]
+#![feature(generic_const_exprs)]
+#![feature(f16)]
+#![feature(f128)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 #![allow(clippy::similar_names)]
@@ -320,8 +323,8 @@ impl Scene {
                             let color = Color(
                                 std::iter::repeat_with(|| {
                                     let pixel_position = self.screen.top_left
-                                                + row_step * (x as f32 + rng::f32() / 2.) // Add random variation
-                                                + column_step * (y as f32 + rng::f32() / 2.);
+                                                + row_step * (x as f32 + f32::random() / 2.) // Add random variation
+                                                + column_step * (y as f32 + f32::random() / 2.);
 
                                     let ray = Ray::new(
                                         self.camera.position,

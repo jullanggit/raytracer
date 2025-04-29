@@ -74,7 +74,7 @@ impl Material {
                     r0 + (1. - r0) * (1. - cos).powi(5)
                 };
 
-                let direction = if refractive_index * sin > 1.0 || rng::f32() < reflectance {
+                let direction = if refractive_index * sin > 1.0 || f32::random() < reflectance {
                     ray.direction.reflect(normal)
                 } else {
                     // refract
