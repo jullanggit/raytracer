@@ -6,6 +6,8 @@ use std::{
     ptr, slice,
 };
 
+use crate::vec3::Vector;
+
 // sys/mman.h
 const MAP_FAILED: *mut c_void = usize::MAX as *mut c_void; // (void *) -1
 // bits/mman-linux.h
@@ -28,8 +30,11 @@ unsafe extern "C" {
     fn munmap(add: *mut c_void, len: c_ulong) -> c_int;
 }
 
+pub type ColorChannel = u8;
+pub type Color = Vector<3, ColorChannel>;
+
 pub struct MmapFile {
-    ptr: *mut u8,
+    ptr: *mut ColorChannel,
     len: usize,
 }
 impl MmapFile {
@@ -70,7 +75,7 @@ impl MmapFile {
             len,
         }
     }
-    pub const fn as_slice_mut(&mut self) -> &mut [u8] {
+    pub const fn as_slice_mut(&mut self) -> &mut [ColorChannel] {
         // SAFETY:
         // - ptr is a valid pointer to memory managed by the OS
         // - len is both the length in bytes and the amount of elements

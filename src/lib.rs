@@ -45,7 +45,7 @@ use std::{
 use bvh::BvhNode;
 use cpu_affinity::set_cpu_affinity;
 use material::{Material, Scatter};
-use mmap::MmapFile;
+use mmap::{Color, ColorChannel, MmapFile};
 use rng::Random as _;
 use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3, Vector};
@@ -57,10 +57,10 @@ pub struct Image {
 }
 impl Image {
     fn new(width: usize, height: usize) -> Self {
-        let header = format!("P6\n{width} {height} 255\n");
+        let header = format!("P6\n{width} {height} {}\n", ColorChannel::MAX);
         let mut file = MmapFile::new(
             "target/out.ppm",
-            header.len() + width * height * size_of::<Vector<3, u8>>(),
+            header.len() + width * height * size_of::<Color>(),
         );
 
         file.as_slice_mut().write_all(header.as_bytes()).unwrap();
@@ -70,9 +70,9 @@ impl Image {
             header_offset: header.len(),
         }
     }
-    fn data(&mut self) -> &mut [Vector<3, u8>] {
+    fn data(&mut self) -> &mut [Color] {
         // SAFETY:
-        // - All bit patterns are valid Vector<3, u8>'s
+        // - All bit patterns are valid Colors
         unsafe { self.file.as_casted_slice_mut(self.header_offset) }
     }
 }
