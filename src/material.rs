@@ -1,9 +1,9 @@
 use std::{fs, ops::Neg as _};
 
 use crate::{
-    Color, Ray,
+    Ray,
     rng::Random as _,
-    vec3::{NormalizedVec3, Vec3},
+    vec3::{NormalizedVec3, Vec3, Vector},
 };
 
 #[derive(Debug, PartialEq)]
@@ -128,11 +128,11 @@ impl From<&str> for MaterialKind {
 
 #[derive(Debug, PartialEq)]
 pub enum ColorKind {
-    Solid(Color<f32>),
+    Solid(Vector<3, f32>),
     Texture {
         width: u32,
         height: u32,
-        data: Box<[Color<u8>]>,
+        data: Box<[Vector<3, u8>]>,
     },
 }
 impl ColorKind {
@@ -161,11 +161,11 @@ impl ColorKind {
         assert_eq!(&contents[base..base + 3], b"255");
 
         // could be done with reinterpretation, but this is not performance critical
-        let data: Box<[Color<u8>]> = contents
+        let data: Box<[Vector<3, u8>]> = contents
             .into_iter()
             .skip(base + 4)
             .array_chunks()
-            .map(Color)
+            .map(Vector)
             .collect();
 
         assert_eq!(data.len(), width as usize * height as usize);
@@ -178,7 +178,7 @@ impl ColorKind {
     }
     /// x & y: 0..=1
     #[expect(clippy::cast_precision_loss)]
-    pub fn sample(&self, coords: [f32; 2]) -> Color<f32> {
+    pub fn sample(&self, coords: [f32; 2]) -> Vector<3, f32> {
         // tile
         let [x, y] = coords.map(|e: f32| e.fract().rem_euclid(1.));
         let y = 1. - y; // flip y-axis
@@ -216,7 +216,7 @@ impl ColorKind {
                 });
 
                 let [c00, c01, c10, c11] = [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]
-                    .map(|[x, y]| Color::<f32>::from(data[x + y * width as usize]));
+                    .map(|[x, y]| Vector::<_, f32>::from(data[x + y * width as usize]));
 
                 let c0 = c00.lerp(c10, dx);
                 let c1 = c01.lerp(c11, dx);

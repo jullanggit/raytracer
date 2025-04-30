@@ -1,11 +1,10 @@
 use std::{collections::HashMap, fs};
 
 use crate::{
-    Color,
     config::push_material,
     material::{ColorKind, Material, MaterialKind},
     shapes::{NormalsTextureCoordinates, Triangle},
-    vec3::{NormalizedVec3, Vec3},
+    vec3::{NormalizedVec3, Vec3, Vector},
 };
 
 #[inline(always)]
@@ -74,7 +73,7 @@ pub fn parse(
                 // default material
                 || {
                     push_material(
-                        Material::new(MaterialKind::Lambertian, ColorKind::Solid(Color([0.5; 3]))),
+                        Material::new(MaterialKind::Lambertian, ColorKind::Solid(Vector([0.5; 3]))),
                         materials,
                     )
                 },
@@ -212,7 +211,7 @@ fn parse_materials<'a>(
             let diffuse_color = lines
                 .clone()
                 .find(|line| line.starts_with("Kd"))
-                .map(|line| Color::from(&line[3..]));
+                .map(|line| Vector::from(&line[3..]));
 
             let diffuse_texture = lines.find(|line| line.starts_with("map_Kd")).map(|line| {
                 let file_name = &line[7..];
@@ -224,7 +223,7 @@ fn parse_materials<'a>(
                 match (diffuse_texture, diffuse_color) {
                     (Some(diffuse_texture), _) => diffuse_texture,
                     (None, Some(diffuse_color)) => ColorKind::Solid(diffuse_color),
-                    (None, None) => ColorKind::Solid(Color([0.5; 3])),
+                    (None, None) => ColorKind::Solid(Vector([0.5; 3])),
                 },
             );
 

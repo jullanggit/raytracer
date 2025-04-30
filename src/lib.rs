@@ -35,7 +35,6 @@ use crate::shapes::{Plane, Sphere};
 use std::{
     array,
     io::{Write as _, stdout},
-    ops::{Add, Div, Mul, MulAssign},
     sync::{
         Mutex, OnceLock,
         atomic::{AtomicUsize, Ordering},
@@ -49,7 +48,7 @@ use material::{Material, Scatter};
 use mmap::MmapFile;
 use rng::Random as _;
 use shapes::Triangle;
-use vec3::{NormalizedVec3, Vec3};
+use vec3::{NormalizedVec3, Vec3, Vector};
 
 /// A ppm p6 image
 pub struct Image {
@@ -61,7 +60,7 @@ impl Image {
         let header = format!("P6\n{width} {height} 255\n");
         let mut file = MmapFile::new(
             "target/out.ppm",
-            header.len() + width * height * size_of::<Color<u8>>(),
+            header.len() + width * height * size_of::<Vector<3, u8>>(),
         );
 
         file.as_slice_mut().write_all(header.as_bytes()).unwrap();
@@ -71,85 +70,10 @@ impl Image {
             header_offset: header.len(),
         }
     }
-    fn data(&mut self) -> &mut [Color<u8>] {
+    fn data(&mut self) -> &mut [Vector<3, u8>] {
         // SAFETY:
-        // - All bit patterns are valid Color<u8>'s
+        // - All bit patterns are valid Vector<3, u8>'s
         unsafe { self.file.as_casted_slice_mut(self.header_offset) }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-#[repr(transparent)]
-/// A rgb color
-/// for Color<f32> values should be between 0 and 1
-pub struct Color<T>([T; 3]);
-
-impl Color<f32> {
-    fn color_correct(self) -> Self {
-        // gamma 2 correction
-        Self(self.0.map(f32::sqrt))
-    }
-    fn lerp(self, other: Self, t: f32) -> Self {
-        Self(array::from_fn(|i| self.0[i] * (1. - t) + other.0[i] * t))
-    }
-}
-
-impl Mul for Color<f32> {
-    type Output = Self;
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self(array::from_fn(|index| self.0[index] * rhs.0[index]))
-    }
-}
-impl MulAssign for Color<f32> {
-    fn mul_assign(&mut self, rhs: Self) {
-        *self = Self(array::from_fn(|index| self.0[index] * rhs.0[index]));
-    }
-}
-impl Mul<f32> for Color<f32> {
-    type Output = Self;
-    fn mul(self, rhs: f32) -> Self::Output {
-        Self(self.0.map(|num| num * rhs))
-    }
-}
-impl Div<f32> for Color<f32> {
-    type Output = Self;
-    fn div(self, rhs: f32) -> Self::Output {
-        Self(self.0.map(|num| num / rhs))
-    }
-}
-impl Add for Color<f32> {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(array::from_fn(|index| self.0[index] + rhs.0[index]))
-    }
-}
-impl From<Color<f32>> for Color<u8> {
-    #[expect(clippy::cast_possible_truncation)] // We check in debug mode
-    #[expect(clippy::cast_sign_loss)]
-    fn from(value: Color<f32>) -> Self {
-        Self(value.0.map(|num| {
-            debug_assert!((0.0..=1.).contains(&num));
-
-            (num * 255.) as u8
-        }))
-    }
-}
-impl From<Color<u8>> for Color<f32> {
-    fn from(value: Color<u8>) -> Self {
-        Self(value.0.map(f32::from).map(|e| e / 255.))
-    }
-}
-
-#[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
-impl From<&str> for Color<f32> {
-    fn from(value: &str) -> Self {
-        let mut values = value.split(' ').map(|value| value.parse().unwrap());
-
-        Self([
-            values.next().unwrap(),
-            values.next().unwrap(),
-            values.next().unwrap(),
-        ])
     }
 }
 
@@ -321,7 +245,7 @@ impl Scene {
                             #[expect(clippy::integer_division)]
                             let y = offset_i / self.screen.resolution_width;
 
-                            let color = Color(
+                            let color = Vector(
                                 std::iter::repeat_with(|| {
                                     let pixel_position = self.screen.top_left
                                                 + row_step * (x as f32 + f32::random() / 2.) // Add random variation
@@ -337,7 +261,7 @@ impl Scene {
                                 .take(sample_chunk_size)
                                 // average colors
                                 .reduce(|acc, element| {
-                                    Color(array::from_fn(|index| {
+                                    Vector(array::from_fn(|index| {
                                         // by first adding them up
                                         acc.0[index] + element.0[index]
                                     }))
@@ -350,8 +274,7 @@ impl Scene {
 
                             if self.incremental.is_some() || self.continue_sampling.is_some() {
                                 // average with last iteration
-                                chunk[i] = ((Color::<f32>::from(chunk[i])
-                                    * sample_iteration as f32
+                                chunk[i] = ((Vector::from(chunk[i]) * sample_iteration as f32
                                     + color.color_correct())
                                     / (sample_iteration as f32 + 1.))
                                     .into();
@@ -371,7 +294,7 @@ impl Scene {
         ray: Ray,
         materials: &[Material],
         bvh_stack: &mut Vec<(f32, u32)>, // is reused across shape types
-    ) -> Color<f32> {
+    ) -> Vector<3, f32> {
         let mut current_ray = ray;
         let mut current_color = None;
 
@@ -402,8 +325,9 @@ impl Scene {
                 None => {
                     let a = 0.5 * (current_ray.direction.y() + 1.0); // y scaled to 0.5-1
 
-                    *current_color.get_or_insert(Color([1.; 3])) *=
-                        Color([0.2, 0.2, 0.8]) * (1.0 - a) + Color([1.; 3]) * a;
+                    let current_color = current_color.get_or_insert(Vector([1.; 3]));
+                    *current_color =
+                        *current_color * Vector([0.2, 0.2, 0.8]) * (1.0 - a) + Vector([1.; 3]) * a;
 
                     break;
                 }
@@ -414,18 +338,18 @@ impl Scene {
                     match shape_material.scatter(&current_ray, normal, hit_point) {
                         Scatter::Scattered(ray, color) => {
                             // calculate color of scattered ray and mix it with the current color
-                            *current_color.get_or_insert(Color([1.; 3])) *=
-                                color.sample(texture_coordinates);
+                            let current_color = current_color.get_or_insert(Vector([1.; 3]));
+                            *current_color = *current_color * color.sample(texture_coordinates);
 
                             current_ray = ray;
                         }
                         Scatter::Absorbed => {
-                            current_color = Some(Color([0.; 3]));
+                            current_color = Some(Vector([0.; 3]));
                             break;
                         }
                         Scatter::Light(color) => {
-                            *current_color.get_or_insert(Color([1.; 3])) *=
-                                color.sample(texture_coordinates);
+                            let current_color = current_color.get_or_insert(Vector([1.; 3]));
+                            *current_color = *current_color * color.sample(texture_coordinates);
                             break;
                         }
                     }
@@ -433,7 +357,7 @@ impl Scene {
             }
         }
 
-        current_color.unwrap_or(Color([0.; 3]))
+        current_color.unwrap_or(Vector([0.; 3]))
     }
 }
 

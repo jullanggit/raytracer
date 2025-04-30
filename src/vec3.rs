@@ -57,6 +57,14 @@ where
         Vector(self.0.map(|e| -e))
     }
 }
+impl<const DIMENSIONS: usize, T> Default for Vector<DIMENSIONS, T>
+where
+    T: Copy + Default,
+{
+    fn default() -> Self {
+        Self([Default::default(); DIMENSIONS])
+    }
+}
 macro_rules! impl_vec_float {
     ($($Type:ident),*) => {
         $(
@@ -83,6 +91,13 @@ macro_rules! impl_vec_float {
                 /// Element-wise max
                 pub fn max(self, other: Self) -> Self {
                     self.combine(&other, $Type::max)
+                }
+                pub fn lerp(self, other: Self, t: $Type) -> Self {
+                    self.combine(&other, |e1, e2| e1 * (1. - t) + e2 * t)
+                }
+                /// gamma 2 correction
+                pub fn color_correct(self) -> Self {
+                    Self(self.0.map($Type::sqrt))
                 }
             }
         )*
@@ -133,6 +148,45 @@ macro_rules! access_vec {
     };
 }
 access_vec!(x => 0, y => 1, z => 2, w => 3);
+// mainly for colors
+macro_rules! float_natural_conversion {
+    // base case
+    ( -> $($natural:ident),*) => {};
+
+    // recurse case
+    ($float:ident $(, $float_tail:ident)* -> $($natural:ident),*) => {
+        $(
+            impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $float>> for Vector<DIMENSIONS, $natural> {
+                #[expect(clippy::cast_possible_truncation)] // We check in debug mode
+                #[expect(clippy::cast_sign_loss)]
+                #[expect(clippy::allow_attributes)]
+                #[allow(clippy::cast_precision_loss)]
+                #[allow(clippy::cast_lossless)]
+                fn from(value: Vector<DIMENSIONS, $float>) -> Self {
+                    Self(
+                        value.0.map(|float| {
+                            debug_assert!((0.0..=1.).contains(&float));
+
+                            (float * $natural::MAX as $float) as $natural
+                        })
+                    )
+                }
+            }
+            #[expect(clippy::allow_attributes)]
+            #[allow(clippy::cast_possible_truncation)] // We check in debug mode
+            #[allow(clippy::cast_sign_loss)]
+            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_lossless)]
+            impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $natural>> for Vector<DIMENSIONS, $float> {
+                fn from(value: Vector<DIMENSIONS, $natural>) -> Self {
+                    Self(value.0.map(|natural| natural as $float / $natural::MAX as $float))
+                }
+            }
+        )*
+        float_natural_conversion!($($float_tail),* -> $($natural),*);
+    };
+}
+float_natural_conversion!(f16, f32, f64, f128 -> u8, u16, u32, u64, u128);
 
 pub type Vec3 = Vector<3, f32>;
 
