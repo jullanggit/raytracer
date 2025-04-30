@@ -4,7 +4,7 @@ use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
     Ray,
     shapes::{Intersects, Shape},
-    vec3::{NormalizedVec3, Vec3},
+    vec3::{NormalizedVec3, Vec3, Vector},
 };
 
 #[derive(Debug)]
@@ -19,11 +19,19 @@ pub struct BvhNode<T: Shape> {
 impl<T: Shape> Intersects for BvhNode<T> {
     #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
-        let t1 = (self.min - ray.origin) / *ray.direction.inner();
-        let t2 = (self.max - ray.origin) / *ray.direction.inner();
+        let t1 = (self.min - ray.origin) / *ray.direction;
+        let t2 = (self.max - ray.origin) / *ray.direction;
 
-        let tmin = t1.x.min(t2.x).max(t1.y.min(t2.y)).max(t1.z.min(t2.z));
-        let tmax = t1.x.max(t2.x).min(t1.y.max(t2.y)).min(t1.z.max(t2.z));
+        let tmin = t1
+            .x()
+            .min(t2.x())
+            .max(t1.y().min(t2.y()))
+            .max(t1.z().min(t2.z()));
+        let tmax = t1
+            .x()
+            .max(t2.x())
+            .min(t1.y().max(t2.y()))
+            .min(t1.z().max(t2.z()));
 
         (tmax >= tmin && tmax > 0.).then_some(tmin)
     }
@@ -36,7 +44,8 @@ impl<T: Shape> BvhNode<T> {
         let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
 
         let extent = max - min;
-        let surface_area = 2. * (extent.x * extent.y + extent.x * extent.z + extent.y * extent.z);
+        let surface_area =
+            2. * (extent.x() * extent.y() + extent.x() * extent.z() + extent.y() * extent.z());
 
         // init root node
         let mut nodes = vec![Self {
@@ -53,7 +62,7 @@ impl<T: Shape> BvhNode<T> {
     #[inline(always)]
     fn smallest_bounds(shapes: &[T], indices: impl Iterator<Item = u32>) -> (Vec3, Vec3) {
         indices.fold(
-            (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
+            (Vector([f32::INFINITY; 3]), Vector([f32::NEG_INFINITY; 3])),
             |(prev_min, prev_max), index| {
                 let (min, max) = (shapes[index as usize].min(), shapes[index as usize].max());
 
@@ -75,10 +84,10 @@ impl<T: Shape> BvhNode<T> {
 
         // iterate over num_bins shapes, approximately evenly spaced
         for offset_num in 1..bins_per_axis {
-            let offsets = self.min + offset_per_bin * offset_num.into();
+            let offsets = self.min + offset_per_bin * f32::from(offset_num);
 
             for axis in 0..3 {
-                let candidate_split = offsets.get(axis);
+                let candidate_split = offsets.0[axis as usize];
 
                 let [[cost_lt, sa_lt], [cost_ge, sa_ge]] = array::from_fn(|child| {
                     let comparison = if child == 0 { f32::lt } else { f32::ge };
@@ -88,7 +97,7 @@ impl<T: Shape> BvhNode<T> {
                         .iter()
                         .filter(|&index| {
                             comparison(
-                                &shapes[index as usize].centroid().get(axis),
+                                &shapes[index as usize].centroid().0[axis as usize],
                                 &candidate_split,
                             )
                         })
@@ -104,8 +113,10 @@ impl<T: Shape> BvhNode<T> {
 
                     let extent = max - min;
 
-                    let surface_area =
-                        2. * (extent.x * extent.y + extent.x * extent.z + extent.y * extent.z);
+                    let surface_area = 2.
+                        * (extent.x() * extent.y()
+                            + extent.x() * extent.z()
+                            + extent.y() * extent.z());
 
                     [
                         #[expect(clippy::cast_precision_loss)] // should be fine
@@ -143,7 +154,7 @@ impl<T: Shape> BvhNode<T> {
         let partition_point = u32::try_from(
             shapes[shapes_range.start as usize..shapes_range.end as usize]
                 .iter_mut()
-                .partition_in_place(|shape| shape.centroid().get(axis) < split),
+                .partition_in_place(|shape| shape.centroid().0[axis as usize] < split),
         )
         .unwrap()
             + shapes_range.start;
@@ -247,10 +258,10 @@ impl<T: Shape> BvhNode<T> {
                 }
                 Leaf { shapes_range } => {
                     for index in shapes_range {
-                        if let Some(time) = shapes[index as usize].intersects(ray) {
-                            if time < closest_hit.0 {
-                                closest_hit = (time, index);
-                            }
+                        if let Some(time) = shapes[index as usize].intersects(ray)
+                            && time < closest_hit.0
+                        {
+                            closest_hit = (time, index);
                         }
                     }
                 }
@@ -260,7 +271,7 @@ impl<T: Shape> BvhNode<T> {
         closest_hit.0.is_finite().then(|| {
             let (time, index) = closest_hit;
 
-            let hit_point = ray.origin + *ray.direction.inner() * time;
+            let hit_point = ray.origin + *ray.direction * time;
 
             (
                 time,

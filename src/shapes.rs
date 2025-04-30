@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     Ray, SCENE,
-    vec3::{NormalizedVec3, Vec3},
+    vec3::{NormalizedVec3, Vec3, Vector},
 };
 
 /// The min distance an intersection has to have for it to count
@@ -55,7 +55,7 @@ impl Intersects for Sphere {
     fn intersects(&self, ray: &Ray) -> Option<f32> {
         let delta_origin = ray.origin - self.center;
 
-        let delta_origin_direction = delta_origin.dot(*ray.direction.inner());
+        let delta_origin_direction = delta_origin.dot(*ray.direction);
         let discriminant = delta_origin_direction * delta_origin_direction
             - delta_origin.dot(delta_origin)
             + self.radius * self.radius;
@@ -87,8 +87,8 @@ impl Shape for Sphere {
         (
             (*point - self.center).normalize(),
             [
-                0.5 + point.z.atan2(point.x) / TAU,
-                0.5 - point.y.asin() / PI,
+                0.5 + point.z().atan2(point.x()) / TAU,
+                0.5 - point.y().asin() / PI,
             ],
         )
     }
@@ -102,11 +102,11 @@ impl Shape for Sphere {
     }
 
     fn min(&self) -> Vec3 {
-        self.center - Vec3::splat(self.radius)
+        self.center - Vector([self.radius; _])
     }
 
     fn max(&self) -> Vec3 {
-        self.center + Vec3::splat(self.radius)
+        self.center + Vector([self.radius; _])
     }
 }
 
@@ -130,13 +130,13 @@ impl Plane {
 impl Intersects for Plane {
     #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
-        let denominator = self.normal.inner().dot(*ray.direction.inner());
+        let denominator = self.normal.dot(*ray.direction);
 
         if denominator.abs() < f32::EPSILON {
             return None; // Ray is parallel to the plane
         }
 
-        let numerator = self.normal.inner().dot(ray.origin - self.point);
+        let numerator = self.normal.dot(ray.origin - self.point);
 
         let t = -(numerator / denominator);
 
@@ -151,7 +151,7 @@ impl Shape for Plane {
             // The normal of a plane is the same at all points on it
             self.normal,
             // tile after 5 units
-            [delta.x % 5., delta.y % 5.],
+            [delta.x() % 5., delta.y() % 5.],
         )
     }
 
@@ -164,11 +164,11 @@ impl Shape for Plane {
     }
 
     fn min(&self) -> Vec3 {
-        Vec3::splat(f32::NEG_INFINITY)
+        Vector([f32::NEG_INFINITY; 3])
     }
 
     fn max(&self) -> Vec3 {
-        Vec3::splat(f32::INFINITY)
+        Vector([f32::INFINITY; 3])
     }
 }
 
@@ -224,7 +224,7 @@ impl Intersects for Triangle {
         // Using f32::EPSILON causes some slight edge misalignments (coming from the naive triangulation) to become visible
         const TOLERANCE: f32 = 2e-6;
 
-        let ray_cross_e2 = ray.direction.inner().cross(self.e2);
+        let ray_cross_e2 = ray.direction.cross(self.e2);
         let det = self.e1.dot(ray_cross_e2);
 
         if det.abs() < TOLERANCE {
@@ -239,7 +239,7 @@ impl Intersects for Triangle {
         }
 
         let s_cross_e1 = s.cross(self.e1);
-        let v = inv_det * ray.direction.inner().dot(s_cross_e1);
+        let v = inv_det * ray.direction.dot(s_cross_e1);
         if v < 0.0 || u + v > 1.0 {
             return None;
         }
@@ -281,9 +281,8 @@ impl Shape for Triangle {
             Both { normals_index, .. } | Normals { normals_index, .. } => {
                 let normals = scene.shapes.vertex_normals[normals_index as usize];
 
-                let weighted_normals: [_; 3] = array::from_fn(|index| {
-                    *normals[index].inner() * barycentric_coordinates[index]
-                });
+                let weighted_normals: [_; 3] =
+                    array::from_fn(|index| *normals[index] * barycentric_coordinates[index]);
 
                 (weighted_normals[0] + weighted_normals[1] + weighted_normals[2]).normalize()
             }

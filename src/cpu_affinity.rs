@@ -39,7 +39,7 @@ pub fn set_cpu_affinity(cpu: usize) {
     // - size_of::<cpu_set_t>() is the correct size for cpu_set_t, as the kernel expects it
     // - cpuset is a valid cpu_set_t and the pointer remains valid for the duration of the call
     #[expect(clippy::undocumented_unsafe_blocks)]
-    let ret = unsafe { sched_setaffinity(0, size_of::<cpu_set_t>() as u64, &cpuset) };
+    let ret = unsafe { sched_setaffinity(0, size_of::<cpu_set_t>() as u64, &raw const cpuset) };
 
     assert_eq!(ret, 0, "Error: {}", Error::last_os_error());
 }

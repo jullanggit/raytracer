@@ -3,13 +3,13 @@ use std::{
     ops::{Add, Deref, Div, Mul, Neg, Sub},
 };
 
-use crate::rng::{self, Random};
+use crate::rng::Random;
 
 // I know this is all way to generic, but its fun :D
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Vector<const DIMENSIONS: usize, T: Copy>([T; DIMENSIONS]);
+pub struct Vector<const DIMENSIONS: usize, T: Copy>(pub [T; DIMENSIONS]);
 impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
     pub fn combine<F, O>(self, other: &Self, f: F) -> Vector<DIMENSIONS, O>
     where
@@ -22,28 +22,17 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
     where
         T: Add<Output = T> + Mul<Output = T>,
     {
-        let multiplied = self * other;
-        multiplied.0.into_iter().reduce(|acc, e| acc + e).unwrap()
-    }
-    /// Element-wise min
-    pub fn min(self, other: Self) -> Self
-    where
-        T: Ord,
-    {
-        self.combine(&other, Ord::min)
-    }
-    /// Element-wise max
-    pub fn max(self, other: Self) -> Self
-    where
-        T: Clone + Ord,
-    {
-        self.combine(&other, Ord::max)
+        (self * other)
+            .0
+            .into_iter()
+            .reduce(|acc, e| acc + e)
+            .unwrap()
     }
     pub fn length_squared(&self) -> T
     where
         T: Add<Output = T> + Clone + Mul<Output = T>,
     {
-        self.clone().dot(self.clone())
+        self.dot(*self)
     }
 }
 impl<T: Copy> Vector<3, T> {
@@ -52,10 +41,20 @@ impl<T: Copy> Vector<3, T> {
         T: Clone + Mul,
         <T as Mul>::Output: Sub<Output = T> + Copy,
     {
-        let yzx = |vector: Self| Self([*vector.y(), *vector.z(), *vector.x()]);
-        let zxy = |vector: Self| Self([*vector.z(), *vector.x(), *vector.y()]);
+        let yzx = |vector: Self| Self([vector.y(), vector.z(), vector.x()]);
+        let zxy = |vector: Self| Self([vector.z(), vector.x(), vector.y()]);
 
         yzx(self) * zxy(other) - zxy(self) * yzx(other)
+    }
+}
+impl<const DIMENSIONS: usize, T> Neg for Vector<DIMENSIONS, T>
+where
+    T: Copy + Neg,
+    T::Output: Copy,
+{
+    type Output = Vector<DIMENSIONS, T::Output>;
+    fn neg(self) -> Self::Output {
+        Vector(self.0.map(|e| -e))
     }
 }
 macro_rules! impl_vec_float {
@@ -66,7 +65,6 @@ macro_rules! impl_vec_float {
                 {
                     self.length_squared().sqrt()
                 }
-                // TODO: Add NormalizedVector
                 pub fn normalize(self) -> NormalizedVector<DIMENSIONS, $Type>
                 {
                     NormalizedVector(self.clone() / self.length())
@@ -77,6 +75,14 @@ macro_rules! impl_vec_float {
                 }
                 pub fn near_zero(&self) -> bool {
                     self.0.map(|e| e.abs() < $Type::EPSILON) == [true; _]
+                }
+                /// Element-wise min
+                pub fn min(self, other: Self) -> Self {
+                    self.combine(&other, $Type::min)
+                }
+                /// Element-wise max
+                pub fn max(self, other: Self) -> Self {
+                    self.combine(&other, $Type::max)
                 }
             }
         )*
@@ -119,8 +125,8 @@ macro_rules! access_vec {
                [(); DIMENSIONS - $index -1]:
             {
                 #[inline]
-                pub const fn $name(&self) -> &T {
-                    &self.0[$index]
+                pub const fn $name(&self) -> T {
+                    self.0[$index]
                 }
             }
         )*
@@ -130,7 +136,6 @@ access_vec!(x => 0, y => 1, z => 2, w => 3);
 
 pub type Vec3 = Vector<3, f32>;
 
-#[expect(clippy::fallible_impl_from)] // TODO: Remove once we care about crashes
 impl From<&str> for Vec3 {
     fn from(value: &str) -> Self {
         let mut values = value.split(' ').map(|value| value.parse().unwrap());
@@ -140,17 +145,38 @@ impl From<&str> for Vec3 {
 }
 
 /// A vector with length 1
-struct NormalizedVector<const DIMENSIONS: usize, T: Copy>(Vector<DIMENSIONS, T>);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NormalizedVector<const DIMENSIONS: usize, T: Copy>(Vector<DIMENSIONS, T>);
 impl<const DIMENSIONS: usize, T: Copy> Deref for NormalizedVector<DIMENSIONS, T> {
     type Target = Vector<DIMENSIONS, T>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
+impl<const DIMENSIONS: usize, T> Neg for NormalizedVector<DIMENSIONS, T>
+where
+    T: Copy + Neg,
+    T::Output: Copy,
+{
+    type Output = NormalizedVector<DIMENSIONS, T::Output>;
+    fn neg(self) -> Self::Output {
+        NormalizedVector(self.0.neg())
+    }
+}
+impl<const DIMENSIONS: usize> Random for NormalizedVector<DIMENSIONS, f32> {
+    fn random() -> Self {
+        Vector(array::from_fn(|_| f32::random() - 0.5)).normalize()
+    }
+}
 macro_rules! impl_normalized_vec_float {
     ($($Type:ident),*) => {
         $(
             impl<const DIMENSIONS: usize> NormalizedVector<DIMENSIONS, $Type> {
+                pub fn new(vector: Vector<DIMENSIONS, $Type>) -> Self {
+                    debug_assert!(vector.is_normalized(), "vector: {vector:?}, len: {:?}", vector.length());
+
+                    Self(vector)
+                }
                 pub fn reflect(&self, normal: Self) -> Self
                 {
                     Self(**self - *normal * 2. * self.dot(*normal))
@@ -161,70 +187,4 @@ macro_rules! impl_normalized_vec_float {
 }
 impl_normalized_vec_float!(f16, f32, f64, f128);
 
-// f32 is currently the only type that implements both normalize() and random()
-impl<const DIMENSIONS: usize> Random for NormalizedVector<DIMENSIONS, f32> {
-    fn random() -> Self {
-        Vector(array::from_fn(|_| f32::random() - 0.5)).normalize()
-    }
-}
-
-// TODO: add some more methods, so that you don't have to do .inner() all the time
-#[derive(Clone, Copy, Debug)]
-#[repr(transparent)]
-pub struct NormalizedVec3(Vec3);
-impl NormalizedVec3 {
-    /// Checks for normalization in debug mode
-    pub fn new(vec: Vec3) -> Self {
-        debug_assert!(vec.is_normalized(), "vec: {vec:?}, len: {}", vec.length());
-
-        Self(vec)
-    }
-    pub const fn inner(&self) -> &Vec3 {
-        &self.0
-    }
-    pub fn near_zero(&self) -> bool {
-        self.0.near_zero()
-    }
-    pub fn random() -> Self {
-        Vec3::new(
-            f32::random() - 0.5,
-            f32::random() - 0.5,
-            f32::random() - 0.5,
-        )
-        .normalize() // -0.5..0.5
-    }
-    pub fn reflect(&self, normal: Self) -> Self {
-        Self::new(self.0 - normal.0 * 2. * self.0.dot(normal.0))
-    }
-    pub fn dot(&self, other: Self) -> f32 {
-        self.inner().dot(*other.inner())
-    }
-}
-
-impl Neg for NormalizedVec3 {
-    type Output = Self;
-    fn neg(self) -> Self::Output {
-        Self::new(-*self.inner())
-    }
-}
-
-impl Add for NormalizedVec3 {
-    type Output = Vec3;
-    fn add(self, rhs: Self) -> Self::Output {
-        self.0 + rhs.0
-    }
-}
-
-impl Mul<f32> for NormalizedVec3 {
-    type Output = Vec3;
-    fn mul(self, rhs: f32) -> Self::Output {
-        self.0 * rhs
-    }
-}
-
-impl Add<Vec3> for NormalizedVec3 {
-    type Output = Vec3;
-    fn add(self, rhs: Vec3) -> Self::Output {
-        self.0 + rhs
-    }
-}
+pub type NormalizedVec3 = NormalizedVector<3, f32>;

@@ -47,6 +47,7 @@ use bvh::BvhNode;
 use cpu_affinity::set_cpu_affinity;
 use material::{Material, Scatter};
 use mmap::MmapFile;
+use rng::Random as _;
 use shapes::Triangle;
 use vec3::{NormalizedVec3, Vec3};
 
@@ -399,7 +400,7 @@ impl Scene {
             match nearest_intersection {
                 // skybox
                 None => {
-                    let a = 0.5 * (current_ray.direction.inner().y + 1.0); // y scaled to 0.5-1
+                    let a = 0.5 * (current_ray.direction.y() + 1.0); // y scaled to 0.5-1
 
                     *current_color.get_or_insert(Color([1.; 3])) *=
                         Color([0.2, 0.2, 0.8]) * (1.0 - a) + Color([1.; 3]) * a;
