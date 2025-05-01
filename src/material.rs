@@ -2,6 +2,7 @@ use std::{fs, ops::Neg as _};
 
 use crate::{
     Ray,
+    mmap::Pixel,
     rng::Random as _,
     vec3::{NormalizedVec3, Vec3, Vector},
 };
@@ -132,7 +133,7 @@ pub enum ColorKind {
     Texture {
         width: u32,
         height: u32,
-        data: Box<[Vector<3, u8>]>,
+        data: Box<[Pixel]>,
     },
 }
 impl ColorKind {
@@ -161,7 +162,7 @@ impl ColorKind {
         assert_eq!(&contents[base..base + 3], b"255");
 
         // could be done with reinterpretation, but this is not performance critical
-        let data: Box<[Vector<3, u8>]> = contents
+        let data: Box<[Pixel]> = contents
             .into_iter()
             .skip(base + 4)
             .array_chunks()

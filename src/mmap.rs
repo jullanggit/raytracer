@@ -31,10 +31,10 @@ unsafe extern "C" {
 }
 
 pub type ColorChannel = u8;
-pub type Color = Vector<3, ColorChannel>;
+pub type Pixel = Vector<3, ColorChannel>;
 
 pub struct MmapFile {
-    ptr: *mut ColorChannel,
+    ptr: *mut u8,
     len: usize,
 }
 impl MmapFile {
