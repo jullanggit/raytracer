@@ -11,6 +11,7 @@ use crate::rng::Random;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vector<const DIMENSIONS: usize, T: Copy>(pub [T; DIMENSIONS]);
 impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
+    #[inline(always)]
     pub fn combine<F, O>(self, other: &Self, f: F) -> Vector<DIMENSIONS, O>
     where
         F: Fn(T, T) -> O,
@@ -18,6 +19,7 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
     {
         Vector(array::from_fn(|index| f(self.0[index], other.0[index])))
     }
+    #[inline(always)]
     pub fn dot(self, other: Self) -> T
     where
         T: Add<Output = T> + Mul<Output = T>,
@@ -28,6 +30,7 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
             .reduce(|acc, e| acc + e)
             .unwrap()
     }
+    #[inline(always)]
     pub fn length_squared(&self) -> T
     where
         T: Add<Output = T> + Clone + Mul<Output = T>,
@@ -36,6 +39,7 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
     }
 }
 impl<T: Copy> Vector<3, T> {
+    #[inline(always)]
     pub fn cross(self, other: Self) -> Self
     where
         T: Clone + Mul,
@@ -53,6 +57,7 @@ where
     T::Output: Copy,
 {
     type Output = Vector<DIMENSIONS, T::Output>;
+    #[inline(always)]
     fn neg(self) -> Self::Output {
         Vector(self.0.map(|e| -e))
     }
@@ -61,6 +66,7 @@ impl<const DIMENSIONS: usize, T> Default for Vector<DIMENSIONS, T>
 where
     T: Copy + Default,
 {
+    #[inline(always)]
     fn default() -> Self {
         Self([Default::default(); DIMENSIONS])
     }
@@ -69,33 +75,41 @@ macro_rules! impl_vec_float {
     ($($Type:ident),*) => {
         $(
             impl<const DIMENSIONS: usize> Vector<DIMENSIONS, $Type> {
+                #[inline(always)]
                 pub fn length(&self) -> $Type
                 {
                     self.length_squared().sqrt()
                 }
+                #[inline(always)]
                 pub fn normalize(self) -> NormalizedVector<DIMENSIONS, $Type>
                 {
                     NormalizedVector(self.clone() / self.length())
                 }
+                #[inline(always)]
                 pub fn is_normalized(&self) -> bool {
                     const TOLERANCE: $Type = 1e-5;
                     self.length() <= 1. + TOLERANCE && self.length() >= 1. - TOLERANCE
                 }
+                #[inline(always)]
                 pub fn near_zero(&self) -> bool {
                     self.0.map(|e| e.abs() < $Type::EPSILON) == [true; _]
                 }
                 /// Element-wise min
+                #[inline(always)]
                 pub fn min(self, other: Self) -> Self {
                     self.combine(&other, $Type::min)
                 }
                 /// Element-wise max
+                #[inline(always)]
                 pub fn max(self, other: Self) -> Self {
                     self.combine(&other, $Type::max)
                 }
+                #[inline(always)]
                 pub fn lerp(self, other: Self, t: $Type) -> Self {
                     self.combine(&other, |e1, e2| e1 * (1. - t) + e2 * t)
                 }
                 /// gamma 2 correction
+                #[inline(always)]
                 pub fn color_correct(self) -> Self {
                     Self(self.0.map($Type::sqrt))
                 }
@@ -113,6 +127,7 @@ macro_rules! impl_vec_op {
                 T::Output: Copy
             {
                 type Output = Vector<DIMENSIONS, T::Output>;
+                #[inline(always)]
                 fn $method(self, rhs: Self) -> Self::Output {
                     self.combine(&rhs, $Trait::$method)
                 }
@@ -123,6 +138,7 @@ macro_rules! impl_vec_op {
                 T::Output: Copy
             {
                 type Output = Vector<DIMENSIONS, T::Output>;
+                #[inline(always)]
                 fn $method(self, rhs: T) -> Self::Output {
                     Vector(self.0.map(|e| e.$method(rhs.clone())))
                 }
@@ -139,7 +155,7 @@ macro_rules! access_vec {
                 // compile-time assertion on index
                [(); DIMENSIONS - $index -1]:
             {
-                #[inline]
+                #[inline(always)]
                 pub const fn $name(&self) -> T {
                     self.0[$index]
                 }
@@ -162,6 +178,7 @@ macro_rules! float_natural_conversion {
                 #[expect(clippy::allow_attributes)]
                 #[allow(clippy::cast_precision_loss)]
                 #[allow(clippy::cast_lossless)]
+                #[inline(always)]
                 fn from(value: Vector<DIMENSIONS, $float>) -> Self {
                     Self(
                         value.0.map(|float| {
@@ -178,6 +195,7 @@ macro_rules! float_natural_conversion {
             #[allow(clippy::cast_precision_loss)]
             #[allow(clippy::cast_lossless)]
             impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $natural>> for Vector<DIMENSIONS, $float> {
+                #[inline(always)]
                 fn from(value: Vector<DIMENSIONS, $natural>) -> Self {
                     Self(value.0.map(|natural| natural as $float / $natural::MAX as $float))
                 }
@@ -203,6 +221,7 @@ impl From<&str> for Vec3 {
 pub struct NormalizedVector<const DIMENSIONS: usize, T: Copy>(Vector<DIMENSIONS, T>);
 impl<const DIMENSIONS: usize, T: Copy> Deref for NormalizedVector<DIMENSIONS, T> {
     type Target = Vector<DIMENSIONS, T>;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -213,11 +232,13 @@ where
     T::Output: Copy,
 {
     type Output = NormalizedVector<DIMENSIONS, T::Output>;
+    #[inline(always)]
     fn neg(self) -> Self::Output {
         NormalizedVector(self.0.neg())
     }
 }
 impl<const DIMENSIONS: usize> Random for NormalizedVector<DIMENSIONS, f32> {
+    #[inline(always)]
     fn random() -> Self {
         Vector(array::from_fn(|_| f32::random() - 0.5)).normalize()
     }
@@ -226,13 +247,14 @@ macro_rules! impl_normalized_vec_float {
     ($($Type:ident),*) => {
         $(
             impl<const DIMENSIONS: usize> NormalizedVector<DIMENSIONS, $Type> {
+                #[inline(always)]
                 pub fn new(vector: Vector<DIMENSIONS, $Type>) -> Self {
                     debug_assert!(vector.is_normalized(), "vector: {vector:?}, len: {:?}", vector.length());
 
                     Self(vector)
                 }
-                pub fn reflect(&self, normal: Self) -> Self
-                {
+                #[inline(always)]
+                pub fn reflect(&self, normal: Self) -> Self {
                     Self(**self - *normal * 2. * self.dot(*normal))
                 }
             }
