@@ -326,8 +326,8 @@ impl Scene {
                     let a = 0.5 * (current_ray.direction.y() + 1.0); // y scaled to 0.5-1
 
                     let current_color = current_color.get_or_insert(Vector([1.; 3]));
-                    *current_color =
-                        *current_color * Vector([0.2, 0.2, 0.8]) * (1.0 - a) + Vector([1.; 3]) * a;
+                    *current_color = *current_color
+                        * (Vector([0.2, 0.2, 0.8]) * (1.0 - a) + Vector([1.; 3]) * a);
 
                     break;
                 }
