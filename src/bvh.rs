@@ -22,16 +22,8 @@ impl<T: Shape> Intersects for BvhNode<T> {
         let t1 = (self.min - ray.origin) / *ray.direction;
         let t2 = (self.max - ray.origin) / *ray.direction;
 
-        let tmin = t1
-            .x()
-            .min(t2.x())
-            .max(t1.y().min(t2.y()))
-            .max(t1.z().min(t2.z()));
-        let tmax = t1
-            .x()
-            .max(t2.x())
-            .min(t1.y().max(t2.y()))
-            .min(t1.z().max(t2.z()));
+        let tmin = t1.min(t2).0.into_iter().reduce(f32::max).unwrap();
+        let tmax = t1.max(t2).0.into_iter().reduce(f32::min).unwrap();
 
         (tmax >= tmin && tmax > 0.).then_some(tmin)
     }
