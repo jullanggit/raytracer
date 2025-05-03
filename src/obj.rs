@@ -77,7 +77,6 @@ pub fn parse(
                         materials,
                     )
                 },
-                // usemtl
             );
 
         lines
@@ -90,19 +89,22 @@ pub fn parse(
                         .split('/')
                         .zip([vertices.len(), texture_coordinates.len(), normals.len()])
                         .map(|(str_index, len)| {
-                            let index: isize = str_index.parse().unwrap();
+                            let index: isize = str_index.parse().ok()?;
 
                             #[expect(clippy::cast_sign_loss)] // we check for negative index
-                            if index < 0 {
+                            Some(if index < 0 {
                                 len - index.unsigned_abs()
                             } else {
                                 index as usize - 1
-                            }
+                            })
                         });
                     (
-                        vertices[indices.next().unwrap()],
-                        indices.next().map(|index| texture_coordinates[index]),
-                        indices.next().map(|index| normals[index]),
+                        vertices[indices.next().unwrap().unwrap()],
+                        indices
+                            .next()
+                            .flatten()
+                            .map(|index| texture_coordinates[index]),
+                        indices.next().flatten().map(|index| normals[index]),
                     )
                 });
 
