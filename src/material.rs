@@ -24,7 +24,7 @@ impl Material {
 
         match self.kind {
             MaterialKind::Lambertian => {
-                let direction = (*normal + *NormalizedVec3::random()).normalize();
+                let direction = (*normal + *NormalizedVec3::random()).normalize::<f32>();
 
                 Scatter::Scattered(
                     Ray::new(

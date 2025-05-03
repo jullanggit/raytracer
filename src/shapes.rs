@@ -85,7 +85,7 @@ impl Shape for Sphere {
     // uses spherical mapping for texture coordinates
     fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
         (
-            (*point - self.center).normalize(),
+            (*point - self.center).normalize::<f32>(),
             [
                 0.5 + point.z().atan2(point.x()) / TAU,
                 0.5 - point.y().asin() / PI,
@@ -255,7 +255,7 @@ impl Shape for Triangle {
     fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
         use NormalsTextureCoordinates::{Both, None, Normals, TextureCoordinates};
 
-        let default_normal = || self.e1.cross(self.e2).normalize();
+        let default_normal = || self.e1.cross(self.e2).normalize::<f32>();
 
         let scene = SCENE.get().unwrap();
         let barycentric_coordinates = match self.normals_texture_coordinates {

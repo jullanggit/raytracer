@@ -132,11 +132,7 @@ pub fn parse(
                         {
                             let normal_index = normals_out.len();
 
-                            normals_out.push([
-                                normal1.normalize(),
-                                normal2.normalize(),
-                                normal3.normalize(),
-                            ]);
+                            normals_out.push([normal1, normal2, normal3].map(Vec3::normalize));
 
                             #[expect(clippy::cast_possible_truncation)]
                             Some(normal_index as u32)

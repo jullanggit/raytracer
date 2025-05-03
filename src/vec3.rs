@@ -7,6 +7,45 @@ use crate::rng::Random;
 
 // I know this is all way to generic, but its fun :D
 
+pub trait Sqrt<Output = Self> {
+    fn sqrt(self) -> Output;
+}
+macro_rules! impl_sqrt {
+    // base case
+    ((), $($Type:ident),*) => {};
+    // recursive case
+    (($float:ident $(, $float_tail:ident)*), $($Type:ident),*) => {
+        $(
+            impl Sqrt<$float> for $Type {
+                #[expect(clippy::allow_attributes)]
+                #[allow(clippy::cast_lossless)]
+                #[allow(clippy::cast_precision_loss)]
+                #[allow(clippy::cast_possible_truncation)]
+                fn sqrt(self) -> $float {
+                    (self as $float).sqrt()
+                }
+            }
+        )*
+        impl_sqrt!(($($float_tail),*), $($Type),*);
+    };
+}
+impl_sqrt!(
+    (f16, f32, f64, f128),
+    f16,
+    f32,
+    f64,
+    f128,
+    u8,
+    u16,
+    u32,
+    u64,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128
+);
+
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vector<const DIMENSIONS: usize, T: Copy>(pub [T; DIMENSIONS]);
@@ -37,6 +76,30 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
     {
         self.dot(*self)
     }
+    #[inline(always)]
+    pub fn length<O>(&self) -> O
+    where
+        T: Add<Output = T> + Clone + Mul<Output = T> + Sqrt<O>,
+    {
+        self.length_squared().sqrt()
+    }
+    #[inline(always)]
+    pub fn normalize<O>(self) -> NormalizedVector<DIMENSIONS, O>
+    where
+        T: Add<Output = T> + Clone + Mul<Output = T> + Sqrt<O>,
+        O: Copy + Div<Output = O>,
+        Vector<DIMENSIONS, O>: From<Self>,
+    {
+        NormalizedVector(Vector::from(self) / self.length())
+    }
+    /// gamma 2 correction
+    #[inline(always)]
+    pub fn color_correct(self) -> Self
+    where
+        T: Sqrt,
+    {
+        Self(self.0.map(Sqrt::sqrt))
+    }
 }
 impl<T: Copy> Vector<3, T> {
     #[inline(always)]
@@ -59,7 +122,7 @@ where
     type Output = Vector<DIMENSIONS, T::Output>;
     #[inline(always)]
     fn neg(self) -> Self::Output {
-        Vector(self.0.map(|e| -e))
+        Vector(self.0.map(Neg::neg))
     }
 }
 impl<const DIMENSIONS: usize, T> Default for Vector<DIMENSIONS, T>
@@ -71,24 +134,37 @@ where
         Self([Default::default(); DIMENSIONS])
     }
 }
+// implement From to convert between vectors of any primitive type
+macro_rules! impl_primitive_vec_from {
+    // base case
+    () => {};
+    ($From:ident $(, $Into:ident)*) => {
+        $(
+            #[expect(clippy::allow_attributes)]
+            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_sign_loss)]
+            #[allow(clippy::cast_lossless)]
+            #[allow(clippy::cast_possible_wrap)]
+            impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $From>> for Vector<DIMENSIONS, $Into> {
+                fn from(value: Vector<DIMENSIONS, $From>) -> Self {
+                    Self(value.0.map(|e| e as $Into))
+                }
+            }
+        )*
+        impl_primitive_vec_from!($($Into),*);
+    }
+}
+impl_primitive_vec_from!(
+    f16, f32, f64, f128, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
+);
 macro_rules! impl_vec_float {
     ($($Type:ident),*) => {
         $(
             impl<const DIMENSIONS: usize> Vector<DIMENSIONS, $Type> {
                 #[inline(always)]
-                pub fn length(&self) -> $Type
-                {
-                    self.length_squared().sqrt()
-                }
-                #[inline(always)]
-                pub fn normalize(self) -> NormalizedVector<DIMENSIONS, $Type>
-                {
-                    NormalizedVector(self.clone() / self.length())
-                }
-                #[inline(always)]
                 pub fn is_normalized(&self) -> bool {
                     const TOLERANCE: $Type = 1e-5;
-                    self.length() <= 1. + TOLERANCE && self.length() >= 1. - TOLERANCE
+                    self.length::<$Type>() <= 1. + TOLERANCE && self.length::<$Type>() >= 1. - TOLERANCE
                 }
                 #[inline(always)]
                 pub fn near_zero(&self) -> bool {
@@ -107,11 +183,6 @@ macro_rules! impl_vec_float {
                 #[inline(always)]
                 pub fn lerp(self, other: Self, t: $Type) -> Self {
                     self.combine(&other, |e1, e2| e1 * (1. - t) + e2 * t)
-                }
-                /// gamma 2 correction
-                #[inline(always)]
-                pub fn color_correct(self) -> Self {
-                    Self(self.0.map($Type::sqrt))
                 }
             }
         )*
@@ -244,6 +315,7 @@ where
         NormalizedVector(self.0.neg())
     }
 }
+// not generic because of the -0.5
 impl<const DIMENSIONS: usize> Random for NormalizedVector<DIMENSIONS, f32> {
     #[inline(always)]
     fn random() -> Self {
@@ -256,7 +328,7 @@ macro_rules! impl_normalized_vec_float {
             impl<const DIMENSIONS: usize> NormalizedVector<DIMENSIONS, $Type> {
                 #[inline(always)]
                 pub fn new(vector: Vector<DIMENSIONS, $Type>) -> Self {
-                    debug_assert!(vector.is_normalized(), "vector: {vector:?}, len: {:?}", vector.length());
+                    debug_assert!(vector.is_normalized(), "vector: {vector:?}, len: {:?}", vector.length::<$Type>());
 
                     Self(vector)
                 }

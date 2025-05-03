@@ -13,6 +13,7 @@
 #![feature(generic_const_exprs)]
 #![feature(f16)]
 #![feature(f128)]
+#![feature(associated_type_defaults)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 #![allow(clippy::similar_names)]
