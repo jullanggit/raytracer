@@ -10,6 +10,7 @@ use crate::rng::Random;
 pub trait Sqrt<Output = Self> {
     fn sqrt(self) -> Output;
 }
+// implement sqrt for primitive number types, naturals get converted to floats
 macro_rules! impl_sqrt {
     // base case
     ((), $($Type:ident),*) => {};
@@ -40,11 +41,14 @@ impl_sqrt!(
     u16,
     u32,
     u64,
+    u128,
+    usize,
     i8,
     i16,
     i32,
     i64,
-    i128
+    i128,
+    isize
 );
 
 #[repr(transparent)]
@@ -185,6 +189,16 @@ macro_rules! impl_vec_float {
                 pub fn lerp(self, other: Self, t: $Type) -> Self {
                     self.combine(&other, |e1, e2| e1 * (1. - t) + e2 * t)
                 }
+                #[inline(always)]
+                pub fn angle_between<O>(self, other: Self) -> $Type {
+                    use std::$Type::consts::PI;
+
+                    if self.dot(other) < 0. {
+                        PI - 2. * ((self + other).length::<$Type>() / 2.).asin()
+                    } else {
+                        2. * ((other - self).length::<$Type>() / 2.)
+                    }
+                }
             }
         )*
     };
@@ -283,7 +297,7 @@ macro_rules! float_natural_conversion {
         float_natural_conversion!($($float_tail),* -> $($natural),*);
     };
 }
-float_natural_conversion!(f16, f32, f64, f128 -> u8, u16, u32, u64, u128);
+float_natural_conversion!(f16, f32, f64, f128 -> u8, u16, u32, u64, u128, usize);
 
 pub type Vec3 = Vector<3, f32>;
 
