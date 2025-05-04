@@ -164,7 +164,14 @@ macro_rules! access_vec {
     };
 }
 access_vec!(x => 0, y => 1, z => 2, w => 3);
-// mainly for colors
+/// Converts natural -> float Colors (0..MAX -> 0.0..1.0).
+pub trait ToFloatColor<F> {
+    fn to_float_color(self) -> F;
+}
+/// Converts float -> natural Colors (0.0..1.0 -> 0..MAX).
+pub trait ToNaturalColor<N> {
+    fn to_natural_color(self) -> N;
+}
 macro_rules! float_natural_conversion {
     // base case
     ( -> $($natural:ident),*) => {};
@@ -172,32 +179,32 @@ macro_rules! float_natural_conversion {
     // recurse case
     ($float:ident $(, $float_tail:ident)* -> $($natural:ident),*) => {
         $(
-            impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $float>> for Vector<DIMENSIONS, $natural> {
-                #[expect(clippy::cast_possible_truncation)] // We check in debug mode
-                #[expect(clippy::cast_sign_loss)]
-                #[expect(clippy::allow_attributes)]
-                #[allow(clippy::cast_precision_loss)]
-                #[allow(clippy::cast_lossless)]
-                #[inline(always)]
-                fn from(value: Vector<DIMENSIONS, $float>) -> Self {
-                    Self(
-                        value.0.map(|float| {
-                            debug_assert!((0.0..=1.).contains(&float));
-
-                            (float * $natural::MAX as $float) as $natural
-                        })
-                    )
-                }
-            }
             #[expect(clippy::allow_attributes)]
             #[allow(clippy::cast_possible_truncation)] // We check in debug mode
             #[allow(clippy::cast_sign_loss)]
             #[allow(clippy::cast_precision_loss)]
             #[allow(clippy::cast_lossless)]
-            impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $natural>> for Vector<DIMENSIONS, $float> {
+            impl<const DIMENSIONS: usize> ToFloatColor<Vector<DIMENSIONS, $float>> for  Vector<DIMENSIONS, $natural> {
                 #[inline(always)]
-                fn from(value: Vector<DIMENSIONS, $natural>) -> Self {
-                    Self(value.0.map(|natural| natural as $float / $natural::MAX as $float))
+                fn to_float_color(self) -> Vector<DIMENSIONS, $float> {
+                    Vector(self.0.map(|natural| natural as $float / $natural::MAX as $float))
+                }
+            }
+            #[expect(clippy::cast_possible_truncation)] // We check in debug mode
+            #[expect(clippy::cast_sign_loss)]
+            #[expect(clippy::allow_attributes)]
+            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_lossless)]
+            impl<const DIMENSIONS: usize> ToNaturalColor<Vector<DIMENSIONS, $natural>> for  Vector<DIMENSIONS, $float> {
+                #[inline(always)]
+                fn to_natural_color(self) -> Vector<DIMENSIONS, $natural> {
+                    Vector(
+                        self.0.map(|float| {
+                            debug_assert!((0.0..=1.).contains(&float));
+
+                            (float * $natural::MAX as $float) as $natural
+                        })
+                    )
                 }
             }
         )*

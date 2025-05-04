@@ -48,7 +48,7 @@ use material::{Material, Scatter};
 use mmap::{ColorChannel, MmapFile, Pixel};
 use rng::Random as _;
 use shapes::Triangle;
-use vec3::{NormalizedVec3, Vec3, Vector};
+use vec3::{NormalizedVec3, ToFloatColor, ToNaturalColor as _, Vec3, Vector};
 
 /// A ppm p6 image
 pub struct Image {
@@ -274,12 +274,14 @@ impl Scene {
 
                             if self.incremental.is_some() || self.continue_sampling.is_some() {
                                 // average with last iteration
-                                chunk[i] = ((Vector::from(chunk[i]) * sample_iteration as f32
-                                    + color.color_correct())
-                                    / (sample_iteration as f32 + 1.))
-                                    .into();
+                                chunk[i] =
+                                    ((ToFloatColor::<Vector<_, f32>>::to_float_color(chunk[i])
+                                        * sample_iteration as f32
+                                        + color.color_correct())
+                                        / (sample_iteration as f32 + 1.))
+                                        .to_natural_color();
                             } else {
-                                chunk[i] = color.color_correct().into();
+                                chunk[i] = color.color_correct().to_natural_color();
                             }
                         }
                     }

@@ -4,7 +4,7 @@ use crate::{
     Ray,
     mmap::Pixel,
     rng::Random as _,
-    vec3::{NormalizedVec3, Vec3, Vector},
+    vec3::{NormalizedVec3, ToFloatColor as _, Vec3, Vector},
 };
 
 #[derive(Debug, PartialEq)]
@@ -216,8 +216,9 @@ impl ColorKind {
                     (e0, e1, de)
                 });
 
-                let [c00, c01, c10, c11] = [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]
-                    .map(|[x, y]| Vector::<_, f32>::from(data[x + y * width as usize]));
+                let [c00, c01, c10, c11]: [Vector<_, f32>; _] =
+                    [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]
+                        .map(|[x, y]| data[x + y * width as usize].to_float_color());
 
                 let c0 = c00.lerp(c10, dx);
                 let c1 = c01.lerp(c11, dx);
