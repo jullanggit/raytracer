@@ -1,4 +1,4 @@
-incremental(10)
+incremental(1)
 screen(-0.96 2.04 3, 1.92 0 0, 0 -1.08 0, 3840, 2160, 10000, 60)
 camera(0 1.5 4)
 spheres()

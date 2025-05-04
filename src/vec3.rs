@@ -21,6 +21,7 @@ macro_rules! impl_sqrt {
                 #[allow(clippy::cast_lossless)]
                 #[allow(clippy::cast_precision_loss)]
                 #[allow(clippy::cast_possible_truncation)]
+                #[inline(always)]
                 fn sqrt(self) -> $float {
                     (self as $float).sqrt()
                 }
@@ -72,21 +73,21 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
     #[inline(always)]
     pub fn length_squared(&self) -> T
     where
-        T: Add<Output = T> + Clone + Mul<Output = T>,
+        T: Add<Output = T> + Mul<Output = T>,
     {
         self.dot(*self)
     }
     #[inline(always)]
     pub fn length<O>(&self) -> O
     where
-        T: Add<Output = T> + Clone + Mul<Output = T> + Sqrt<O>,
+        T: Add<Output = T> + Mul<Output = T> + Sqrt<O>,
     {
         self.length_squared().sqrt()
     }
     #[inline(always)]
     pub fn normalize<O>(self) -> NormalizedVector<DIMENSIONS, O>
     where
-        T: Add<Output = T> + Clone + Mul<Output = T> + Sqrt<O>,
+        T: Add<Output = T> + Mul<Output = T> + Sqrt<O>,
         O: Copy + Div<Output = O>,
         Vector<DIMENSIONS, O>: From<Self>,
     {
@@ -105,8 +106,7 @@ impl<T: Copy> Vector<3, T> {
     #[inline(always)]
     pub fn cross(self, other: Self) -> Self
     where
-        T: Clone + Mul,
-        <T as Mul>::Output: Sub<Output = T> + Copy,
+        T: Mul<Output: Sub<Output = T> + Copy>,
     {
         let yzx = |vector: Self| Self([vector.y(), vector.z(), vector.x()]);
         let zxy = |vector: Self| Self([vector.z(), vector.x(), vector.y()]);
@@ -146,6 +146,7 @@ macro_rules! impl_primitive_vec_from {
             #[allow(clippy::cast_lossless)]
             #[allow(clippy::cast_possible_wrap)]
             impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $From>> for Vector<DIMENSIONS, $Into> {
+                #[inline(always)]
                 fn from(value: Vector<DIMENSIONS, $From>) -> Self {
                     Self(value.0.map(|e| e as $Into))
                 }
@@ -211,7 +212,7 @@ macro_rules! impl_vec_op {
                 type Output = Vector<DIMENSIONS, T::Output>;
                 #[inline(always)]
                 fn $method(self, rhs: T) -> Self::Output {
-                    Vector(self.0.map(|e| e.$method(rhs.clone())))
+                    Vector(self.0.map(|e| e.$method(rhs)))
                 }
             }
         )*
