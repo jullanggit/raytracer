@@ -105,8 +105,15 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
     {
         Self(self.0.map(Sqrt::sqrt))
     }
+    pub fn gram_schmidt(self, w: NormalizedVector<DIMENSIONS, T>) -> Self
+    where
+        T: Add<Output = T> + Mul<Output = T> + Sub<Output = T>,
+    {
+        self - *w * self.dot(*w)
+    }
 }
 impl<T: Copy> Vector<3, T> {
+    // TODO: maybe use difference_of_products (not yet implemented) to raise precision
     #[inline(always)]
     pub fn cross(self, other: Self) -> Self
     where
@@ -350,6 +357,16 @@ macro_rules! impl_normalized_vec_float {
                 #[inline(always)]
                 pub fn reflect(&self, normal: Self) -> Self {
                     Self(**self - *normal * 2. * self.dot(*normal))
+                }
+            }
+            impl NormalizedVector<3, $Type> {
+                #[inline(always)]
+                pub fn coordinate_system(self) -> [Self;2] {
+                    let sign = $Type::copysign(1., self.z());
+                    let a = -1. / (sign + self.z());
+                    let b = self.x() * self.y() * a;
+
+                    [Self(Vector([1. + sign * self.x().sqrt() * a, sign * b, -sign * self.x()])), Self(Vector([b, sign + self.y().sqrt() * a, -self.y()]))]
                 }
             }
         )*
