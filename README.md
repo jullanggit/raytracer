@@ -1,4 +1,4 @@
-A zero-dependency raytracer, following https://matklad.github.io/2022/12/31/raytracer-construction-kit.html
+A zero-dependency raytracer, following first matklad's [raytracer-construction-kit](https://matklad.github.io/2022/12/31/raytracer-construction-kit.html) and now the [pbr book](https://www.pbr-book.org)
 
 ## Features
 - Spheres, Planes & Triangles
