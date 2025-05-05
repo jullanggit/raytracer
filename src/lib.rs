@@ -20,6 +20,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 
+pub mod aabb;
 pub mod bvh;
 pub mod config;
 pub mod cpu_affinity;

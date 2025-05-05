@@ -51,6 +51,27 @@ impl_sqrt!(
     isize
 );
 
+pub trait MinMax<Other = Self> {
+    fn min(self, other: Other) -> Self;
+    fn max(self, other: Other) -> Self;
+}
+macro_rules! impl_min_max {
+    ($Trait:ident -> $($Type:ident),*) => {
+        $(
+            impl MinMax for $Type {
+                fn min(self, other: Self) -> Self {
+                    $Trait::min(self, other)
+                }
+                fn max(self, other: Self) -> Self {
+                    $Trait::max(self, other)
+                }
+            }
+        )*
+    };
+}
+impl_min_max!(Self -> f16, f32, f64, f128);
+impl_min_max!(Ord -> u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
+
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vector<const DIMENSIONS: usize, T: Copy>(pub [T; DIMENSIONS]);
@@ -110,6 +131,22 @@ impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T> {
         T: Add<Output = T> + Mul<Output = T> + Sub<Output = T>,
     {
         self - *w * self.dot(*w)
+    }
+    /// Element-wise min
+    #[inline(always)]
+    pub fn min(self, other: Self) -> Self
+    where
+        T: MinMax,
+    {
+        self.combine(&other, MinMax::min)
+    }
+    /// Element-wise max
+    #[inline(always)]
+    pub fn max(self, other: Self) -> Self
+    where
+        T: MinMax,
+    {
+        self.combine(&other, MinMax::max)
     }
 }
 impl<T: Copy> Vector<3, T> {
@@ -181,16 +218,6 @@ macro_rules! impl_vec_float {
                 #[inline(always)]
                 pub fn near_zero(&self) -> bool {
                     self.0.map(|e| e.abs() < $Type::EPSILON) == [true; _]
-                }
-                /// Element-wise min
-                #[inline(always)]
-                pub fn min(self, other: Self) -> Self {
-                    self.combine(&other, $Type::min)
-                }
-                /// Element-wise max
-                #[inline(always)]
-                pub fn max(self, other: Self) -> Self {
-                    self.combine(&other, $Type::max)
                 }
                 #[inline(always)]
                 pub fn lerp(self, other: Self, t: $Type) -> Self {

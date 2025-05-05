@@ -81,7 +81,7 @@ impl MmapFile {
         // - len is both the length in bytes and the amount of elements
         unsafe { slice::from_raw_parts_mut(self.ptr, self.len) }
     }
-    /// Casts the memory from byte-offset `offset` onwards to &mut [T].
+    /// Casts the memory from byte-offset `offset` onwards to &mut \[`T`\].
     /// # SAFETY:
     /// All Data in the mapping must be a valid instance of T.
     #[expect(clippy::missing_safety_doc)] // clippy doesnt detect
