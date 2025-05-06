@@ -1,6 +1,9 @@
-use std::ops::{Add, Mul, Sub};
-
-use crate::vec3::{MinMax, Sqrt, Vector};
+use crate::vec3::{Lerp, MinMax, Sqrt, Vector};
+use std::{
+    array,
+    cmp::Ordering,
+    ops::{Add, Div, Mul, Sub},
+};
 
 pub struct Aabb<const DIMENSIONS: usize, T: Copy> {
     min: Vector<DIMENSIONS, T>,
@@ -82,6 +85,61 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
         self.min = self.min - delta;
         self.max = self.max + delta;
     }
+    pub fn diagonal(&self) -> Vector<DIMENSIONS, <T as Sub>::Output>
+    where
+        T: Sub<Output: Copy>,
+    {
+        self.max - self.min
+    }
+    /// index of the dimensions with the biggest value
+    pub fn max_dimension(&self) -> <T as Sub>::Output
+    where
+        T: Sub<Output: Copy + PartialOrd>,
+    {
+        let d = self.diagonal();
+        d.0.into_iter()
+            .max_by(|e1, e2| e1.partial_cmp(e2).unwrap_or(Ordering::Equal))
+            .unwrap()
+    }
+    /// Interpolate between the corners by t dimension-wise
+    pub fn lerp<X>(&self, t: Vector<DIMENSIONS, X>) -> Vector<DIMENSIONS, <T as Lerp<X>>::Output>
+    where
+        T: Lerp<X, Output: Copy>,
+        X: Copy,
+    {
+        Vector(array::from_fn(|index| {
+            self.min.0[index].lerp(self.max.0[index], t.0[index])
+        }))
+    }
+    /// The position of `point` relative to the corners.
+    /// min = 0, max = 1
+    pub fn offset(&self, point: Vector<DIMENSIONS, T>) -> Vector<DIMENSIONS, T>
+    where
+        T: Sub<Output = T> + PartialOrd + Div<Output = T>,
+    {
+        let mut out = point - self.min;
+        for index in 0..DIMENSIONS {
+            if self.max.0[index] > self.min.0[index] {
+                out.0[index] = out.0[index] / (self.max.0[index] - self.min.0[index]);
+            }
+        }
+        out
+    }
+    pub fn is_empty(&self) -> bool
+    where
+        T: PartialOrd,
+    {
+        (0..DIMENSIONS).any(|index| self.min.0[index] >= self.max.0[index])
+    }
+}
+impl<T: Copy> Aabb<2, T> {
+    pub fn area(&self) -> <<T as Sub>::Output as Mul>::Output
+    where
+        T: Sub<Output: Copy + Mul>,
+    {
+        let d = self.diagonal();
+        d.x() * d.y()
+    }
 }
 impl<T: Copy> Aabb<3, T> {
     pub fn corner(&self, corner: usize) -> Vector<3, T> {
@@ -96,9 +154,24 @@ impl<T: Copy> Aabb<3, T> {
             v
         }))
     }
+    pub fn surface_area(&self) -> T
+    where
+        T: Add<Output = T> + From<u8> + Mul<Output = T> + Sub<Output = T>,
+    {
+        let d = self.diagonal();
+        T::from(2) * (d.x() * d.y() + d.x() * d.z() + d.y() * d.z())
+    }
+    pub fn volume(&self) -> <T as Sub>::Output
+    where
+        T: Sub<Output: Copy + Mul<Output = <T as Sub>::Output>>,
+    {
+        let d = self.diagonal();
+        d.x() * d.y() * d.z()
+    }
 }
 
 pub trait Union<T> {
+    /// Grow the bounding box to include `value`
     fn union(&mut self, value: T);
 }
 impl<const DIMENSIONS: usize, T: Copy + MinMax> Union<Vector<DIMENSIONS, T>>

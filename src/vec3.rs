@@ -72,6 +72,21 @@ macro_rules! impl_min_max {
 impl_min_max!(Self -> f16, f32, f64, f128);
 impl_min_max!(Ord -> u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
+pub trait Lerp<X> {
+    type Output;
+    fn lerp(&self, other: Self, x: X) -> Self::Output;
+}
+impl<T, X> Lerp<X> for T
+where
+    T: Clone + Mul<X> + Mul<<X as Sub>::Output, Output: Add<<T as Mul<X>>::Output>>,
+    X: From<u8> + Sub + Clone,
+{
+    type Output = <<T as Mul<<X as Sub>::Output>>::Output as Add<<T as Mul<X>>::Output>>::Output;
+    fn lerp(&self, other: Self, x: X) -> Self::Output {
+        self.clone() * (X::from(1) - x.clone()) + other * x
+    }
+}
+
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vector<const DIMENSIONS: usize, T: Copy>(pub [T; DIMENSIONS]);
@@ -218,10 +233,6 @@ macro_rules! impl_vec_float {
                 #[inline(always)]
                 pub fn near_zero(&self) -> bool {
                     self.0.map(|e| e.abs() < $Type::EPSILON) == [true; _]
-                }
-                #[inline(always)]
-                pub fn lerp(self, other: Self, t: $Type) -> Self {
-                    self.combine(&other, |e1, e2| e1 * (1. - t) + e2 * t)
                 }
                 #[inline(always)]
                 pub fn angle_between<O>(self, other: Self) -> $Type {
