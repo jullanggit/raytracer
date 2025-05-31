@@ -24,6 +24,7 @@ pub mod aabb;
 pub mod bvh;
 pub mod config;
 pub mod cpu_affinity;
+pub mod indices;
 pub mod material;
 pub mod mmap;
 pub mod obj;
