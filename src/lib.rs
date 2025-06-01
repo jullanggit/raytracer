@@ -14,6 +14,8 @@
 #![feature(f16)]
 #![feature(f128)]
 #![feature(associated_type_defaults)]
+#![feature(step_trait)]
+#![feature(vec_into_raw_parts)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 #![allow(clippy::similar_names)]

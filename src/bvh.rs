@@ -1,15 +1,19 @@
-use std::{array, f32, marker::PhantomData, range::Range};
-
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
     Ray,
+    indices::Indexer,
     shapes::{Intersects, Shape},
-    vec3::{NormalizedVec3, Vec3, Vector},
+    vec3::{AsConvert as _, NormalizedVec3, Vec3, Vector},
 };
+use std::{array, f32, marker::PhantomData, ptr, range::Range};
+
+type BvhNodeIndexerType = u32;
+pub type BvhNodeIndexer<Shape> = Indexer<BvhNodeIndexerType, BvhNode<Shape>>;
+type ShapesIndexer<Shape> = Indexer<u32, Shape>;
 
 #[derive(Debug)]
 pub struct BvhNode<T: Shape> {
-    kind: BvhNodeKind,
+    kind: BvhNodeKind<T>,
     // aabb
     min: Vec3,
     max: Vec3,
@@ -32,7 +36,8 @@ impl<T: Shape> Intersects for BvhNode<T> {
 impl<T: Shape> BvhNode<T> {
     #[inline(always)]
     pub fn new(shapes: &mut [T]) -> Vec<Self> {
-        let shapes_range = Range::from(0..shapes.len().try_into().unwrap());
+        let shapes_range =
+            Range::from(Indexer::new(0)..Indexer::new(shapes.len().try_into().unwrap()));
         let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
 
         let extent = max - min;
@@ -47,16 +52,19 @@ impl<T: Shape> BvhNode<T> {
             _type: PhantomData,
         }];
 
-        Self::subdivide(0, shapes, &mut nodes, surface_area);
+        Self::subdivide(Indexer::new(0), shapes, nodes.as_mut(), surface_area);
 
         nodes
     }
     #[inline(always)]
-    fn smallest_bounds(shapes: &[T], indices: impl Iterator<Item = u32>) -> (Vec3, Vec3) {
+    fn smallest_bounds(
+        shapes: &[T],
+        indices: impl Iterator<Item = ShapesIndexer<T>>,
+    ) -> (Vec3, Vec3) {
         indices.fold(
             (Vector([f32::INFINITY; 3]), Vector([f32::NEG_INFINITY; 3])),
             |(prev_min, prev_max), index| {
-                let (min, max) = (shapes[index as usize].min(), shapes[index as usize].max());
+                let (min, max) = (index.index(shapes).min(), index.index(shapes).max());
 
                 (prev_min.min(min), prev_max.max(max))
             },
@@ -89,7 +97,7 @@ impl<T: Shape> BvhNode<T> {
                         .iter()
                         .filter(|&index| {
                             comparison(
-                                &shapes[index as usize].centroid().0[axis as usize],
+                                &index.index(shapes).centroid().0[axis as usize],
                                 &candidate_split,
                             )
                         })
@@ -128,14 +136,20 @@ impl<T: Shape> BvhNode<T> {
         best_split
     }
 
-    fn subdivide(index: usize, shapes: &mut [T], nodes: &mut Vec<Self>, surface_area: f32) {
-        let Leaf { shapes_range } = nodes[index].kind else {
+    fn subdivide(
+        index: BvhNodeIndexer<T>,
+        shapes: &mut [T],
+        nodes: &mut Vec<Self>,
+        surface_area: f32,
+    ) {
+        let Leaf { shapes_range } = index.index(nodes).kind else {
             unreachable!()
         };
 
-        let num = shapes_range.end - shapes_range.start;
+        let num = shapes_range.end.inner() - shapes_range.start.inner();
 
-        let (axis, split, cost, child_surface_areas) = nodes[index].get_split(shapes, surface_area);
+        let (axis, split, cost, child_surface_areas) =
+            index.index(nodes).get_split(shapes.as_ref(), surface_area);
 
         // (cost of traversal + child costs) vs leaf cost
         #[expect(clippy::cast_precision_loss)] // should be fine
@@ -143,13 +157,15 @@ impl<T: Shape> BvhNode<T> {
             return;
         }
 
-        let partition_point = u32::try_from(
-            shapes[shapes_range.start as usize..shapes_range.end as usize]
-                .iter_mut()
-                .partition_in_place(|shape| shape.centroid().0[axis as usize] < split),
-        )
-        .unwrap()
-            + shapes_range.start;
+        let partition_point = Indexer::new(
+            u32::try_from(
+                Indexer::<u32, T>::index_range_mut(shapes_range, shapes)
+                    .iter_mut()
+                    .partition_in_place(|shape| shape.centroid().0[axis as usize] < split),
+            )
+            .unwrap()
+                + shapes_range.start.inner(),
+        );
 
         // split box
         let child_ranges = [
@@ -177,7 +193,7 @@ impl<T: Shape> BvhNode<T> {
                 _type: PhantomData,
             };
 
-            let child_index = nodes.len();
+            let child_index = Indexer::new(nodes.len().as_convert());
 
             nodes.push(child);
 
@@ -188,10 +204,10 @@ impl<T: Shape> BvhNode<T> {
                 child_surface_areas[child_range_index],
             );
 
-            child_index.try_into().unwrap()
+            child_index
         });
 
-        nodes[index].kind = Branch { children };
+        index.index_mut(nodes).kind = Branch { children };
     }
     /// Returns the closest shape that intersects with the ray, alongside the distance
     #[inline(always)]
@@ -199,14 +215,22 @@ impl<T: Shape> BvhNode<T> {
         ray: &Ray,
         shapes: &[T],
         nodes: &[Self],
-        stack: &mut Vec<(f32, u32)>,
+        stack: &mut Vec<(f32, BvhNodeIndexerType)>,
     ) -> Option<(f32, Vec3, (NormalizedVec3, [f32; 2]), u16)> {
         stack.clear();
+        // SAFETY:
+        // - Indexer is a repr(transparent) wrapper around IndexerType
+        //  -> thus they have the same alignment and size
+        // - we clear()'ed, so we dont have to worry about dropping / validity of existing items
+        // - we shadow the old `stack`, so it can't be reused
+        let stack = unsafe {
+            &mut *ptr::from_mut(stack).cast::<Vec<(f32, Indexer<BvhNodeIndexerType, Self>)>>()
+        };
 
-        let mut closest_hit = (f32::INFINITY, u32::MAX); // distance, shapes_index
+        let mut closest_hit = (f32::INFINITY, Indexer::new(u32::MAX)); // distance, shapes_index
 
         // stack is ordered from far to near
-        stack.push((0., 0));
+        stack.push((0., Indexer::new(0)));
 
         // we always push the closest child last, so node is almost always the closest node
         while let Some(entry) = stack.pop() {
@@ -216,12 +240,12 @@ impl<T: Shape> BvhNode<T> {
                 continue;
             }
 
-            let node = &nodes[entry.1 as usize];
+            let node = entry.1.index(nodes);
 
             match node.kind {
                 Branch { children } => {
                     match children.map(|child_node_index| {
-                        let child = &nodes[child_node_index as usize];
+                        let child = child_node_index.index(nodes);
 
                         child.intersects(ray).and_then(|intersection| {
                             // push if intersection is closer than closest
@@ -250,7 +274,7 @@ impl<T: Shape> BvhNode<T> {
                 }
                 Leaf { shapes_range } => {
                     for index in shapes_range {
-                        if let Some(time) = shapes[index as usize].intersects(ray)
+                        if let Some(time) = index.index(shapes).intersects(ray)
                             && time < closest_hit.0
                         {
                             closest_hit = (time, index);
@@ -268,15 +292,21 @@ impl<T: Shape> BvhNode<T> {
             (
                 time,
                 hit_point,
-                shapes[index as usize].normal_and_texture_coordinates(&hit_point),
-                shapes[index as usize].material_index(),
+                index
+                    .index(shapes)
+                    .normal_and_texture_coordinates(&hit_point),
+                index.index(shapes).material_index(),
             )
         })
     }
 }
 
 #[derive(Debug)]
-enum BvhNodeKind {
-    Branch { children: [u32; 2] },
-    Leaf { shapes_range: Range<u32> },
+enum BvhNodeKind<T: Shape> {
+    Branch {
+        children: [BvhNodeIndexer<T>; 2],
+    },
+    Leaf {
+        shapes_range: Range<ShapesIndexer<T>>,
+    },
 }

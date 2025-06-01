@@ -197,30 +197,63 @@ where
         Self([Default::default(); DIMENSIONS])
     }
 }
-// implement From to convert between vectors of any primitive type
-macro_rules! impl_primitive_vec_from {
+/// Convert between types using `as`
+pub trait AsConvert<T> {
+    fn as_convert(&self) -> T;
+}
+macro_rules! impl_as_convert {
     // base case
     () => {};
     ($From:ident $(, $Into:ident)*) => {
+        impl AsConvert<$From> for $From {
+            fn as_convert(&self) -> $From {
+                *self
+            }
+        }
+
         $(
-            #[expect(clippy::allow_attributes)]
-            #[allow(clippy::cast_possible_truncation)]
-            #[allow(clippy::cast_sign_loss)]
-            #[allow(clippy::cast_lossless)]
-            #[allow(clippy::cast_possible_wrap)]
-            impl<const DIMENSIONS: usize> From<Vector<DIMENSIONS, $From>> for Vector<DIMENSIONS, $Into> {
+            impl AsConvert<$Into> for $From {
+                #[expect(clippy::allow_attributes)]
+                #[allow(clippy::cast_lossless)]
+                #[allow(clippy::cast_precision_loss)]
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_sign_loss)]
+                #[allow(clippy::cast_possible_wrap)]
                 #[inline(always)]
-                fn from(value: Vector<DIMENSIONS, $From>) -> Self {
-                    Self(value.0.map(|e| e as $Into))
+                fn as_convert(&self) -> $Into {
+                    *self as $Into
+                }
+            }
+            impl AsConvert<$From> for $Into {
+                #[expect(clippy::allow_attributes)]
+                #[allow(clippy::cast_lossless)]
+                #[allow(clippy::cast_precision_loss)]
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_sign_loss)]
+                #[allow(clippy::cast_possible_wrap)]
+                #[inline(always)]
+                fn as_convert(&self) -> $From {
+                    *self as $From
                 }
             }
         )*
-        impl_primitive_vec_from!($($Into),*);
+        impl_as_convert!($($Into),*);
     }
 }
-impl_primitive_vec_from!(
+impl_as_convert!(
     f16, f32, f64, f128, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
 );
+impl<const DIMENSIONS: usize, Source, Target> AsConvert<Vector<DIMENSIONS, Target>>
+    for Vector<DIMENSIONS, Source>
+where
+    Source: AsConvert<Target> + Copy,
+    Target: Copy,
+{
+    #[inline(always)]
+    fn as_convert(&self) -> Vector<DIMENSIONS, Target> {
+        Vector(self.0.map(|e| e.as_convert()))
+    }
+}
 macro_rules! impl_vec_float {
     ($($Type:ident),*) => {
         $(
