@@ -276,14 +276,14 @@ impl Shape for Triangle {
                 ..
             } => self.barycentric_coordinates(
                 point,
-                scene.shapes.barycentric_precomputed[barycentric_precomputed_index as usize],
+                *barycentric_precomputed_index.index(&*scene.shapes.barycentric_precomputed),
             ),
             None => return (default_normal(), Default::default()), // triangles with textures should also have texture coordinates
         };
 
         let normal = match self.normals_texture_coordinates {
             Both { normals_index, .. } | Normals { normals_index, .. } => {
-                let normals = scene.shapes.vertex_normals[normals_index as usize];
+                let normals = normals_index.index(&*scene.shapes.vertex_normals);
 
                 let weighted_normals: [_; 3] =
                     array::from_fn(|index| *normals[index] * barycentric_coordinates[index]);
@@ -302,7 +302,7 @@ impl Shape for Triangle {
                 ..
             } => {
                 let texture_coordinates =
-                    scene.shapes.texture_coordinates[texture_coordinates_index as usize];
+                    texture_coordinates_index.index(&*scene.shapes.texture_coordinates);
 
                 let weighted_texture_coordinates: [_; 3] = array::from_fn(|index| {
                     texture_coordinates[index].map(|e| e * barycentric_coordinates[index])
@@ -342,20 +342,24 @@ impl Shape for Triangle {
     }
 }
 
+type NormalsIndexer = Indexer<u32, [NormalizedVec3; 3]>;
+type TextureCoordinatesIndexer = Indexer<u32, [[f32; 2]; 3]>;
+type BarycentricPrecomputedIndexer = Indexer<u32, [f32; 4]>;
+
 #[derive(Debug, PartialEq)]
 pub enum NormalsTextureCoordinates {
     Both {
-        normals_index: u32,
-        texture_coordinates_index: u32,
-        barycentric_precomputed_index: u32,
+        normals_index: NormalsIndexer,
+        texture_coordinates_index: TextureCoordinatesIndexer,
+        barycentric_precomputed_index: BarycentricPrecomputedIndexer,
     },
     Normals {
-        normals_index: u32,
-        barycentric_precomputed_index: u32,
+        normals_index: NormalsIndexer,
+        barycentric_precomputed_index: BarycentricPrecomputedIndexer,
     },
     TextureCoordinates {
-        texture_coordinates_index: u32,
-        barycentric_precomputed_index: u32,
+        texture_coordinates_index: TextureCoordinatesIndexer,
+        barycentric_precomputed_index: BarycentricPrecomputedIndexer,
     },
     None,
 }

@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs};
 
 use crate::{
     config::push_material,
+    indices::Indexer,
     material::{ColorKind, Material, MaterialKind},
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
     vec3::{NormalizedVec3, Vec3, Vector},
@@ -121,7 +122,7 @@ pub fn parse(
                         {
                             let index = texture_coordinates_out.len();
                             texture_coordinates_out.push([tc1, tc2, tc3]);
-                            Some(index.try_into().unwrap())
+                            Some(Indexer::new(index.try_into().unwrap()))
                         } else {
                             None
                         };
@@ -135,7 +136,7 @@ pub fn parse(
                             normals_out.push([normal1, normal2, normal3].map(Vec3::normalize));
 
                             #[expect(clippy::cast_possible_truncation)]
-                            Some(normal_index as u32)
+                            Some(Indexer::new(normal_index.try_into().unwrap()))
                         } else {
                             None
                         };
@@ -149,7 +150,7 @@ pub fn parse(
 
                             barycentric_precomputed.push([d00, d01, d11, d00 * d11 - d01.powi(2)]);
 
-                            index.try_into().unwrap()
+                            Indexer::new(index.try_into().unwrap())
                         };
                         let normals_texture_coordinates =
                             match (texture_coordinates_index, normals_index) {
