@@ -9,11 +9,15 @@ use std::{
 
 use crate::{
     Ray, SCENE,
+    indices::Indexer,
+    material::Material,
     vec3::{NormalizedVec3, Vec3, Vector},
 };
 
 /// The min distance an intersection has to have for it to count
 const MIN_DISTANCE: f32 = 0.001;
+
+pub type MaterialIndexer = Indexer<u16, Material>;
 
 pub trait Intersects {
     /// The time at which the ray intersects the object
@@ -24,7 +28,7 @@ pub trait Shape: Intersects + Debug {
     /// Calculates the normal of a point on the shape's surface
     fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]);
 
-    fn material_index(&self) -> u16;
+    fn material_index(&self) -> MaterialIndexer;
 
     // BVH
     fn centroid(&self) -> Vec3;
@@ -38,10 +42,10 @@ pub trait Shape: Intersects + Debug {
 pub struct Sphere {
     center: Vec3,
     radius: f32,
-    material_index: u16,
+    material_index: MaterialIndexer,
 }
 impl Sphere {
-    pub const fn new(center: Vec3, radius: f32, material_index: u16) -> Self {
+    pub const fn new(center: Vec3, radius: f32, material_index: MaterialIndexer) -> Self {
         Self {
             center,
             radius,
@@ -93,7 +97,7 @@ impl Shape for Sphere {
         )
     }
 
-    fn material_index(&self) -> u16 {
+    fn material_index(&self) -> MaterialIndexer {
         self.material_index
     }
 
@@ -114,11 +118,11 @@ impl Shape for Sphere {
 pub struct Plane {
     point: Vec3,
     normal: NormalizedVec3,
-    material_index: u16,
+    material_index: MaterialIndexer,
 }
 
 impl Plane {
-    pub const fn new(point: Vec3, normal: NormalizedVec3, material_index: u16) -> Self {
+    pub const fn new(point: Vec3, normal: NormalizedVec3, material_index: MaterialIndexer) -> Self {
         Self {
             point,
             normal,
@@ -155,7 +159,7 @@ impl Shape for Plane {
         )
     }
 
-    fn material_index(&self) -> u16 {
+    fn material_index(&self) -> MaterialIndexer {
         self.material_index
     }
 
@@ -180,7 +184,7 @@ pub struct Triangle {
     /// The edge from a to c
     e2: Vec3,
     normals_texture_coordinates: NormalsTextureCoordinates,
-    material_index: u16,
+    material_index: MaterialIndexer,
 }
 impl Triangle {
     pub fn new(
@@ -188,7 +192,7 @@ impl Triangle {
         b: Vec3,
         c: Vec3,
         normals_texture_coordinates: NormalsTextureCoordinates,
-        material_index: u16,
+        material_index: MaterialIndexer,
     ) -> Self {
         Self {
             a,
@@ -315,7 +319,7 @@ impl Shape for Triangle {
 
         (normal, texture_coordinates)
     }
-    fn material_index(&self) -> u16 {
+    fn material_index(&self) -> MaterialIndexer {
         self.material_index
     }
 

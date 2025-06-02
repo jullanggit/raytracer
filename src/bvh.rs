@@ -2,7 +2,7 @@ use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
     Ray,
     indices::Indexer,
-    shapes::{Intersects, Shape},
+    shapes::{Intersects, MaterialIndexer, Shape},
     vec3::{AsConvert as _, NormalizedVec3, Vec3, Vector},
 };
 use std::{array, f32, marker::PhantomData, ptr, range::Range};
@@ -216,7 +216,7 @@ impl<T: Shape> BvhNode<T> {
         shapes: &[T],
         nodes: &[Self],
         stack: &mut Vec<(f32, BvhNodeIndexerType)>,
-    ) -> Option<(f32, Vec3, (NormalizedVec3, [f32; 2]), u16)> {
+    ) -> Option<(f32, Vec3, (NormalizedVec3, [f32; 2]), MaterialIndexer)> {
         stack.clear();
         // SAFETY:
         // - Indexer is a repr(transparent) wrapper around IndexerType

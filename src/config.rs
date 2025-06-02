@@ -3,9 +3,10 @@ use std::str::Split;
 use crate::{
     Bvhs, Camera, Plane, Scene, Screen, Shapes, Sphere,
     bvh::BvhNode,
+    indices::Indexer,
     material::{ColorKind, Material},
     obj,
-    shapes::{NormalsTextureCoordinates, Triangle},
+    shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
     vec3::Vec3,
 };
 
@@ -142,7 +143,10 @@ pub fn parse(string: &str) -> Scene {
     )
 }
 
-fn push_material_with_values(values: &mut Split<&str>, materials: &mut Vec<Material>) -> u16 {
+fn push_material_with_values(
+    values: &mut Split<&str>,
+    materials: &mut Vec<Material>,
+) -> MaterialIndexer {
     push_material(
         Material::new(
             values.next().unwrap().into(),
@@ -153,17 +157,19 @@ fn push_material_with_values(values: &mut Split<&str>, materials: &mut Vec<Mater
 }
 
 /// Push the given material to materials and returns the index
-pub fn push_material(material: Material, materials: &mut Vec<Material>) -> u16 {
-    materials
-        .iter()
-        .position(|existing_material| *existing_material == material)
-        .unwrap_or_else(|| {
-            let index = materials.len();
-            materials.push(material);
-            index
-        })
-        .try_into()
-        .unwrap()
+pub fn push_material(material: Material, materials: &mut Vec<Material>) -> MaterialIndexer {
+    Indexer::new(
+        materials
+            .iter()
+            .position(|existing_material| *existing_material == material)
+            .unwrap_or_else(|| {
+                let index = materials.len();
+                materials.push(material);
+                index
+            })
+            .try_into()
+            .unwrap(),
+    )
 }
 
 fn single_item_parse<T>(value: &str, mut f: impl FnMut(&mut Split<&str>) -> T) -> T {

@@ -340,7 +340,7 @@ impl Scene {
                 }
                 // scattter
                 Some((_, hit_point, (normal, texture_coordinates), shape_material_index)) => {
-                    let shape_material = &materials[shape_material_index as usize];
+                    let shape_material = shape_material_index.index(materials);
 
                     match shape_material.scatter(&current_ray, normal, hit_point) {
                         Scatter::Scattered(ray, color) => {

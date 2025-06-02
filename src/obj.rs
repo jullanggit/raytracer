@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs};
 use crate::{
     config::push_material,
     material::{ColorKind, Material, MaterialKind},
-    shapes::{NormalsTextureCoordinates, Triangle},
+    shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
     vec3::{NormalizedVec3, Vec3, Vector},
 };
 
@@ -197,7 +197,7 @@ fn parse_materials<'a>(
     materials: &mut Vec<Material>,
     material_file: Option<&'a str>,
     parent_path: &str,
-) -> HashMap<&'a str, u16> {
+) -> HashMap<&'a str, MaterialIndexer> {
     let mut name_index = HashMap::new();
     if let Some(material_file) = material_file {
         // skip(1): skip header etc
