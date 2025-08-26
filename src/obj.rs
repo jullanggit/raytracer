@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs};
 
 use crate::{
-    config::push_material,
+    config::Interner,
     indices::Indexer,
     material::{ColorKind, Material, MaterialKind},
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
@@ -11,7 +11,7 @@ use crate::{
 #[inline(always)]
 pub fn parse(
     path: &str,
-    materials: &mut Vec<Material>,
+    materials: &mut Interner<Material>,
     texture_coordinates_out: &mut Vec<[[f32; 2]; 3]>,
     normals_out: &mut Vec<[NormalizedVec3; 3]>,
     barycentric_precomputed: &mut Vec<[f32; 4]>,
@@ -73,10 +73,10 @@ pub fn parse(
             .unwrap_or_else(
                 // default material
                 || {
-                    push_material(
-                        Material::new(MaterialKind::Lambertian, ColorKind::Solid(Vector([0.5; 3]))),
-                        materials,
-                    )
+                    materials.intern(Material::new(
+                        MaterialKind::Lambertian,
+                        ColorKind::Solid(Vector([0.5; 3])),
+                    ))
                 },
             );
 
@@ -135,7 +135,6 @@ pub fn parse(
 
                             normals_out.push([normal1, normal2, normal3].map(Vec3::normalize));
 
-                            #[expect(clippy::cast_possible_truncation)]
                             Some(Indexer::new(normal_index.try_into().unwrap()))
                         } else {
                             None
@@ -195,7 +194,7 @@ pub fn parse(
 /// Returns a `HashMap` of (material name -> material index)
 // TODO: parse some more properties
 fn parse_materials<'a>(
-    materials: &mut Vec<Material>,
+    materials: &mut Interner<Material>,
     material_file: Option<&'a str>,
     parent_path: &str,
 ) -> HashMap<&'a str, MaterialIndexer> {
@@ -226,7 +225,7 @@ fn parse_materials<'a>(
                 },
             );
 
-            let index = push_material(material, materials);
+            let index = materials.intern(material);
 
             name_index.insert(name, index);
         }

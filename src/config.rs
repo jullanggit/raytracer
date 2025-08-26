@@ -3,7 +3,7 @@ use std::str::Split;
 use crate::{
     Bvhs, Camera, Plane, Scene, Screen, Shapes, Sphere,
     bvh::BvhNode,
-    indices::Indexer,
+    indices::{HasIndexer, Indexer},
     material::{ColorKind, Material},
     obj,
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
@@ -25,7 +25,7 @@ pub fn parse(string: &str) -> Scene {
     let mut normals = Vec::new();
     let mut texture_coordinates = Vec::new();
     let mut barycentric_precomputed = Vec::new();
-    let mut materials = Vec::new();
+    let mut materials = Interner(Vec::new());
 
     // parse
     while screen.is_none()
@@ -139,37 +139,40 @@ pub fn parse(string: &str) -> Scene {
             texture_coordinates,
             barycentric_precomputed,
         ),
-        materials,
+        materials.0.into_boxed_slice(),
     )
 }
 
 fn push_material_with_values(
     values: &mut Split<&str>,
-    materials: &mut Vec<Material>,
+    materials: &mut Interner<Material>,
 ) -> MaterialIndexer {
-    push_material(
-        Material::new(
-            values.next().unwrap().into(),
-            ColorKind::Solid(values.next().unwrap().into()),
-        ),
-        materials,
-    )
+    materials.intern(Material::new(
+        values.next().unwrap().into(),
+        ColorKind::Solid(values.next().unwrap().into()),
+    ))
 }
 
-/// Push the given material to materials and returns the index
-pub fn push_material(material: Material, materials: &mut Vec<Material>) -> MaterialIndexer {
-    Indexer::new(
-        materials
-            .iter()
-            .position(|existing_material| *existing_material == material)
-            .unwrap_or_else(|| {
-                let index = materials.len();
-                materials.push(material);
-                index
-            })
-            .try_into()
-            .unwrap(),
-    )
+pub struct Interner<T: HasIndexer + PartialEq>(Vec<T>)
+where
+    usize: AsConvert<T::IndexerType>;
+impl<T: HasIndexer + PartialEq> Interner<T>
+where
+    usize: AsConvert<T::IndexerType>,
+{
+    pub fn intern(&mut self, value: T) -> Indexer<T::IndexerType, T::Data> {
+        Indexer::new(
+            self.0
+                .iter()
+                .position(|existing_material| *existing_material == value)
+                .unwrap_or_else(|| {
+                    let index = self.0.len();
+                    self.0.push(value);
+                    index
+                })
+                .as_convert(),
+        )
+    }
 }
 
 fn single_item_parse<T>(value: &str, mut f: impl FnMut(&mut Split<&str>) -> T) -> T {

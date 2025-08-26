@@ -2,6 +2,7 @@ use std::{fs, ops::Neg as _};
 
 use crate::{
     Ray,
+    indices::HasIndexer,
     mmap::Pixel,
     rng::Random as _,
     vec3::{Lerp as _, NormalizedVec3, ToFloatColor as _, Vec3, Vector},
@@ -92,6 +93,9 @@ impl Material {
             MaterialKind::Light => Scatter::Light(&self.color_kind),
         }
     }
+}
+impl HasIndexer for Material {
+    type IndexerType = u16;
 }
 
 pub enum Scatter<'a> {

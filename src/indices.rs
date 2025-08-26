@@ -8,6 +8,11 @@ use std::{
 
 use crate::vec3::AsConvert;
 
+pub trait HasIndexer: Sized {
+    type IndexerType: AsConvert<usize> = usize;
+    type Data = Self;
+}
+
 #[derive(Debug)]
 /// An indexer for something containing `Data`
 #[repr(transparent)]

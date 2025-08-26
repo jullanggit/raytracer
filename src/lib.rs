@@ -100,7 +100,7 @@ pub struct Scene {
     camera: Camera,
     shapes: Shapes,
     bvhs: Bvhs,
-    materials: Vec<Material>,
+    materials: Box<[Material]>,
 }
 
 #[derive(Debug)]
@@ -163,7 +163,7 @@ impl Scene {
         camera: Camera,
         bvhs: Bvhs,
         shapes: Shapes,
-        materials: Vec<Material>,
+        materials: Box<[Material]>,
     ) -> Self {
         Self {
             incremental,

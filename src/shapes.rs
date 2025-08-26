@@ -9,6 +9,7 @@ use std::{
 
 use crate::{
     Ray, SCENE,
+    indices::HasIndexer,
     indices::Indexer,
     material::Material,
     vec3::{NormalizedVec3, Vec3, Vector},
@@ -17,7 +18,8 @@ use crate::{
 /// The min distance an intersection has to have for it to count
 const MIN_DISTANCE: f32 = 0.001;
 
-pub type MaterialIndexer = Indexer<u16, Material>;
+pub type MaterialIndexer =
+    Indexer<<Material as HasIndexer>::IndexerType, <Material as HasIndexer>::Data>;
 
 pub trait Intersects {
     /// The time at which the ray intersects the object
