@@ -25,7 +25,7 @@ macro_rules! ImplFloat {
     };
     ([$(const $const:ident;)+ $(std const $std_const:ident;)+ $(fn $fn:ident(self $(, $arg:ident: $type:ty )*) -> $return:ty);+ $(;)?]) => {
         pub trait Float: Copy + Add<Output = Self> + Mul<Output = Self>
-        + Div<Output = Self> + PartialOrd + Sub<Output = Self>
+        + Div<Output = Self> + PartialOrd + Sub<Output = Self> + From<bool>
         + Debug + Neg<Output = Self> {
             $(const $const: Self;)+
             $(const $std_const: Self;)+
@@ -69,7 +69,7 @@ ImplFloat!({f16} {f32} {f64} {f128} [
     fn sin(self) -> Self;
     fn cos(self) -> Self;
 ]);
-fn literal_to_float<T>(literal: f128) -> T
+pub fn literal_to_float<T>(literal: f128) -> T
 where
     f128: AsConvert<T>,
 {
