@@ -5,6 +5,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 
+/// An axis-aligned bounding-box generic over its dimensionality and containing type
 pub struct Aabb<const DIMENSIONS: usize, T: Copy> {
     min: Vector<DIMENSIONS, T>,
     max: Vector<DIMENSIONS, T>,

@@ -7,7 +7,7 @@ use crate::{
     material::{ColorKind, Material},
     obj,
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
-    vec3::Vec3,
+    vec3::{AsConvert, Vec3},
 };
 
 #[expect(clippy::too_many_lines)]

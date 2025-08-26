@@ -1,11 +1,86 @@
 use std::{
     array,
+    fmt::Debug,
+    num::FpCategory,
     ops::{Add, Deref, Div, Mul, Neg, Sub},
 };
 
 use crate::rng::Random;
 
 // I know this is all way to generic, but its fun :D
+
+macro_rules! ImplFloat {
+    ({$float:ident} $({$tail:ident})* [$(const $const:ident;)+ $(std const $std_const:ident;)+ $(fn $fn:ident(self $(, $arg:ident: $type:ty )*) -> $return:ty);+ $(;)?]) => {
+        impl Float for $float {
+            $(const $const: $float = $float::$const;)+
+            $(const $std_const: Self = std::$float::consts::$std_const;)+
+            $(
+                fn $fn(self $(, $arg: $type)*) -> $return {
+                    self.$fn($($arg),*)
+                }
+            )+
+        }
+
+        ImplFloat!($({$tail})* [$(const $const;)+ $(std const $std_const;)+ $(fn $fn(self $(, $arg: $type )*) -> $return);+]);
+    };
+    ([$(const $const:ident;)+ $(std const $std_const:ident;)+ $(fn $fn:ident(self $(, $arg:ident: $type:ty )*) -> $return:ty);+ $(;)?]) => {
+        pub trait Float: Copy + Add<Output = Self> + Mul<Output = Self>
+        + Div<Output = Self> + PartialOrd + Sub<Output = Self>
+        + Debug + Neg<Output = Self> {
+            $(const $const: Self;)+
+            $(const $std_const: Self;)+
+            $(fn $fn(self $(, $arg: $type)*) -> $return;)+
+        }
+    }
+}
+ImplFloat!({f16} {f32} {f64} {f128} [
+    const EPSILON;
+    std const PI;
+    fn abs(self) -> Self;
+    fn acos(self) -> Self;
+    fn acosh(self) -> Self;
+    fn asin(self) -> Self;
+    fn asinh(self) -> Self;
+    fn atan(self) -> Self;
+    fn atan2(self, other: Self) -> Self;
+    fn atanh(self) -> Self;
+    fn cbrt(self) -> Self;
+    fn ceil(self) -> Self;
+    fn classify(self) -> FpCategory;
+    fn is_sign_positive(self) -> bool;
+    fn is_sign_negative(self) -> bool;
+    fn next_up(self) -> Self;
+    fn next_down(self) -> Self;
+    fn recip(self) -> Self;
+    fn to_degrees(self) -> Self;
+    fn to_radians(self) -> Self;
+    fn max(self, other: Self) -> Self;
+    fn min(self, other: Self) -> Self;
+    fn midpoint(self, other: Self) -> Self;
+    fn clamp(self, min: Self, max: Self) -> Self;
+    fn copysign(self, sign: Self) -> Self;
+    fn sqrt(self) -> Self;
+    fn mul_add(self, a: Self, b: Self) -> Self;
+    fn powf(self, n: Self) -> Self;
+    fn exp(self) -> Self;
+    fn exp2(self) -> Self;
+    fn ln(self) -> Self;
+    fn log(self, base: Self) -> Self;
+    fn sin(self) -> Self;
+    fn cos(self) -> Self;
+]);
+fn literal_to_float<T>(literal: f128) -> T
+where
+    f128: AsConvert<T>,
+{
+    literal.as_convert()
+}
+
+impl<T: Float> Sqrt for T {
+    fn sqrt(self) -> Self {
+        self.sqrt()
+    }
+}
 
 pub trait Sqrt<Output = Self> {
     fn sqrt(self) -> Output;
@@ -33,10 +108,6 @@ macro_rules! impl_sqrt {
 }
 impl_sqrt!(
     (f16, f32, f64, f128),
-    f16,
-    f32,
-    f64,
-    f128,
     u8,
     u16,
     u32,
@@ -254,34 +325,31 @@ where
         Vector(self.0.map(|e| e.as_convert()))
     }
 }
-macro_rules! impl_vec_float {
-    ($($Type:ident),*) => {
-        $(
-            impl<const DIMENSIONS: usize> Vector<DIMENSIONS, $Type> {
-                #[inline(always)]
-                pub fn is_normalized(&self) -> bool {
-                    const TOLERANCE: $Type = 1e-5;
-                    self.length::<$Type>() <= 1. + TOLERANCE && self.length::<$Type>() >= 1. - TOLERANCE
-                }
-                #[inline(always)]
-                pub fn near_zero(&self) -> bool {
-                    self.0.map(|e| e.abs() < $Type::EPSILON) == [true; _]
-                }
-                #[inline(always)]
-                pub fn angle_between<O>(self, other: Self) -> $Type {
-                    use std::$Type::consts::PI;
-
-                    if self.dot(other) < 0. {
-                        PI - 2. * ((self + other).length::<$Type>() / 2.).asin()
-                    } else {
-                        2. * ((other - self).length::<$Type>() / 2.)
-                    }
-                }
-            }
-        )*
-    };
+impl<const DIMENSIONS: usize, T: Float> Vector<DIMENSIONS, T>
+where
+    f128: AsConvert<T>,
+{
+    #[inline(always)]
+    pub fn is_normalized(&self) -> bool {
+        const TOLERANCE: f128 = 1e-5;
+        self.length::<T>() <= (1. + TOLERANCE).as_convert()
+            && self.length::<T>() >= (1. - TOLERANCE).as_convert()
+    }
+    #[inline(always)]
+    pub fn near_zero(&self) -> bool {
+        self.0.map(|e| e.abs() < T::EPSILON) == [true; _]
+    }
+    #[inline(always)]
+    pub fn angle_between<O>(self, other: Self) -> T {
+        if self.dot(other) < (0.).as_convert() {
+            T::PI
+                - literal_to_float(2.)
+                    * ((self + other).length::<T>() / literal_to_float(2.)).asin()
+        } else {
+            literal_to_float(2.) * ((other - self).length::<T>() / literal_to_float(2.))
+        }
+    }
 }
-impl_vec_float!(f16, f32, f64, f128);
 macro_rules! impl_vec_op {
     ($(($Trait:ident, $method:ident)),*) => {
         $(
@@ -415,34 +483,61 @@ impl<const DIMENSIONS: usize> Random for NormalizedVector<DIMENSIONS, f32> {
         Vector(array::from_fn(|_| f32::random() - 0.5)).normalize()
     }
 }
-macro_rules! impl_normalized_vec_float {
-    ($($Type:ident),*) => {
-        $(
-            impl<const DIMENSIONS: usize> NormalizedVector<DIMENSIONS, $Type> {
-                #[inline(always)]
-                pub fn new(vector: Vector<DIMENSIONS, $Type>) -> Self {
-                    debug_assert!(vector.is_normalized(), "vector: {vector:?}, len: {:?}", vector.length::<$Type>());
+impl<const DIMENSIONS: usize, T: Float> NormalizedVector<DIMENSIONS, T>
+where
+    f128: AsConvert<T>,
+{
+    #[inline(always)]
+    pub fn new(vector: Vector<DIMENSIONS, T>) -> Self {
+        debug_assert!(
+            vector.is_normalized(),
+            "vector: {vector:?}, len: {:?}",
+            vector.length::<T>()
+        );
 
-                    Self(vector)
-                }
-                #[inline(always)]
-                pub fn reflect(&self, normal: Self) -> Self {
-                    Self(**self - *normal * 2. * self.dot(*normal))
-                }
-            }
-            impl NormalizedVector<3, $Type> {
-                #[inline(always)]
-                pub fn coordinate_system(self) -> [Self;2] {
-                    let sign = $Type::copysign(1., self.z());
-                    let a = -1. / (sign + self.z());
-                    let b = self.x() * self.y() * a;
-
-                    [Self(Vector([1. + sign * self.x().sqrt() * a, sign * b, -sign * self.x()])), Self(Vector([b, sign + self.y().sqrt() * a, -self.y()]))]
-                }
-            }
-        )*
-    };
+        Self(vector)
+    }
+    #[inline(always)]
+    pub fn reflect(&self, normal: Self) -> Self {
+        Self(**self - *normal * literal_to_float(2.) * self.dot(*normal))
+    }
 }
-impl_normalized_vec_float!(f16, f32, f64, f128);
+impl<T: Float> NormalizedVector<3, T>
+where
+    f128: AsConvert<T>,
+{
+    #[inline(always)]
+    pub fn coordinate_system(self) -> [Self; 2] {
+        let sign = T::copysign(literal_to_float(1.), self.z());
+        let a = literal_to_float(-1.) / (sign + self.z());
+        let b = self.x() * self.y() * a;
+
+        [
+            Self(Vector([
+                literal_to_float(1.) + sign * self.x().sqrt() * a,
+                sign * b,
+                -sign * self.x(),
+            ])),
+            Self(Vector([b, sign + self.y().sqrt() * a, -self.y()])),
+        ]
+    }
+    #[inline(always)]
+    // A unit vector pointing in the given spherical direction
+    pub fn spherical_direction(sin_theta: T, cos_theta: T, phi: T) -> Self {
+        {
+            let lower = literal_to_float(-1.);
+            let upper = literal_to_float(1.);
+            debug_assert!(
+                lower < sin_theta && sin_theta <= upper && lower < cos_theta && cos_theta <= upper,
+                "sin_theta: {sin_theta:?}, cos_theta: {cos_theta:?}"
+            );
+        }
+        Self(Vector([
+            sin_theta * phi.cos(),
+            sin_theta * phi.sin(),
+            cos_theta,
+        ]))
+    }
+}
 
 pub type NormalizedVec3 = NormalizedVector<3, f32>;

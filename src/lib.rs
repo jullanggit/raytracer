@@ -31,6 +31,7 @@ pub mod mmap;
 pub mod obj;
 pub mod rng;
 pub mod shapes;
+pub mod transform;
 pub mod vec3;
 
 pub static SCENE: OnceLock<Scene> = OnceLock::new();
