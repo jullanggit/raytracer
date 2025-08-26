@@ -95,13 +95,13 @@ impl MmapFile {
         let len = self.len - offset;
 
         // check alignment
-        assert!(ptr as usize % align_of::<T>() == 0);
+        assert!((ptr as usize).is_multiple_of(align_of::<T>()));
 
         let t_size = size_of::<T>();
         assert!(t_size != 0, "Zero-sized types are not supported");
 
         // check length
-        assert!(len % t_size == 0);
+        assert!(len.is_multiple_of(t_size));
         #[expect(clippy::integer_division)]
         let new_len = len / t_size;
 

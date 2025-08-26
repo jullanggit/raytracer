@@ -118,7 +118,7 @@ pub fn parse(string: &str) -> Scene {
 
     if let Some(amount) = incremental {
         assert!(amount != 0);
-        assert!(screen.samples_per_pixel % amount == 0);
+        assert!(screen.samples_per_pixel.is_multiple_of(amount));
     }
 
     Scene::new(
