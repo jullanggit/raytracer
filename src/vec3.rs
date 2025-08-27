@@ -2,7 +2,7 @@ use std::{
     array,
     fmt::Debug,
     num::FpCategory,
-    ops::{Add, Deref, Div, Mul, Neg, Sub},
+    ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub},
 };
 
 use crate::rng::Random;
@@ -26,7 +26,7 @@ macro_rules! ImplFloat {
     ([$(const $const:ident;)+ $(std const $std_const:ident;)+ $(fn $fn:ident(self $(, $arg:ident: $type:ty )*) -> $return:ty);+ $(;)?]) => {
         pub trait Float: Copy + Add<Output = Self> + Mul<Output = Self>
         + Div<Output = Self> + PartialOrd + Sub<Output = Self> + From<bool>
-        + Debug + Neg<Output = Self> {
+        + Debug + Neg<Output = Self> + AddAssign {
             $(const $const: Self;)+
             $(const $std_const: Self;)+
             $(fn $fn(self $(, $arg: $type)*) -> $return;)+
