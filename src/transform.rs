@@ -134,10 +134,6 @@ where
         Self::identity()
     }
 }
-
-pub struct Transform {
-    m: SquareMatrix<4, f32>,
-    inv_m: SquareMatrix<4, f32>,
 macro_rules! implMatrixScalarOps {
     ($($Trait:ident, $method:ident),+) => {
         $(
@@ -202,4 +198,83 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Transform<const N: usize, T> {
+    m: SquareMatrix<N, T>,
+    inv_m: SquareMatrix<N, T>,
+}
+impl<const N: usize, T> Transform<N, T> {
+    /// Construct a Transform given a matrix and its inverse. Correct inverse will be checked in debug mode.
+    pub fn new(m: SquareMatrix<N, T>, inv_m: SquareMatrix<N, T>) -> Self
+    where
+        T: Clone + Debug + PartialEq + DivAssign + Mul<Output = T> + SubAssign + From<bool>,
+        u8: AsConvert<T>,
+    {
+        debug_assert_eq!(m.clone().inverse(), Some(inv_m.clone()));
+
+        Self { m, inv_m }
+    }
+    /// Construct a Transform given a matrix and its inverse, without checking it.
+    pub const fn new_unchecked(m: SquareMatrix<N, T>, inv_m: SquareMatrix<N, T>) -> Self {
+        Self { m, inv_m }
+    }
+    pub fn invert(self) -> Self {
+        Self {
+            m: self.inv_m,
+            inv_m: self.m,
+        }
+    }
+    pub fn transpose(self) -> Self
+    where
+        T: Copy,
+        u8: AsConvert<T>,
+    {
+        Self {
+            m: self.m.transpose(),
+            inv_m: self.inv_m.transpose(),
+        }
+    }
+}
+impl<T> Transform<4, T> {
+    pub fn translate(delta: Vector<3, T>) -> Self
+    where
+        T: From<bool> + Copy + Neg<Output = T>,
+    {
+        let mut out = SquareMatrix::default();
+        let mut out_inv = SquareMatrix::default();
+        for i in 0..3 {
+            out[i][3] = delta.0[i];
+            out_inv[i][3] = -delta.0[i];
+        }
+
+        Self {
+            m: out,
+            inv_m: out_inv,
+        }
+    }
+}
+impl<const N: usize, T> Default for Transform<N, T>
+where
+    T: From<bool>,
+{
+    /// Identity
+    fn default() -> Self {
+        Self {
+            m: SquareMatrix::default(),
+            inv_m: SquareMatrix::default(),
+        }
+    }
+}
+impl<const N: usize, T> TryFrom<SquareMatrix<N, T>> for Transform<N, T>
+where
+    T: Copy + PartialEq + DivAssign + Mul<Output = T> + SubAssign + From<bool>,
+    u8: AsConvert<T>,
+{
+    type Error = &'static str;
+    fn try_from(value: SquareMatrix<N, T>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            m: value.clone(),
+            inv_m: value.inverse().ok_or("Failed to invert matrix")?,
+        })
+    }
 }
