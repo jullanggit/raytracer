@@ -235,16 +235,33 @@ impl<const N: usize, T> Transform<N, T> {
         }
     }
 }
-impl<T> Transform<4, T> {
-    pub fn translate(delta: Vector<3, T>) -> Self
+impl<const N: usize, T> Transform<N, T> {
+    pub fn translate(delta: Vector<{ N - 1 }, T>) -> Self
     where
         T: From<bool> + Copy + Neg<Output = T>,
     {
         let mut out = SquareMatrix::default();
         let mut out_inv = SquareMatrix::default();
-        for i in 0..3 {
-            out[i][3] = delta.0[i];
-            out_inv[i][3] = -delta.0[i];
+        for i in 0..N - 1 {
+            out[i][N - 1] = delta.0[i];
+            out_inv[i][N - 1] = -delta.0[i];
+        }
+
+        Self {
+            m: out,
+            inv_m: out_inv,
+        }
+    }
+    pub fn scale(scale: Vector<{ N - 1 }, T>) -> Self
+    where
+        T: From<bool> + Copy + Div<Output = T>,
+        u8: AsConvert<T>,
+    {
+        let mut out = SquareMatrix::default();
+        let mut out_inv = SquareMatrix::default();
+        for i in 0..N - 1 {
+            out[i][i] = scale.0[i];
+            out_inv[i][i] = 1.as_convert() / scale.0[i];
         }
 
         Self {
