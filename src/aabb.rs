@@ -1,4 +1,4 @@
-use crate::vec3::{Lerp, MinMax, Sqrt, Vector};
+use crate::vec3::{Vector, Lerp, MinMax, Sqrt};
 use std::{
     array,
     cmp::Ordering,
@@ -82,7 +82,7 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
     where
         T: Add<Output = T> + Sub<Output = T>,
     {
-        let delta = Vector([delta; _]);
+        let delta = Vector::new([delta; _]);
         self.min = self.min - delta;
         self.max = self.max + delta;
     }
@@ -103,12 +103,15 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
             .unwrap()
     }
     /// Interpolate between the corners by t dimension-wise
-    pub fn lerp<X>(&self, t: Vector<DIMENSIONS, X>) -> Vector<DIMENSIONS, <T as Lerp<X>>::Output>
+    pub fn lerp<X>(
+        &self,
+        t: Vector<DIMENSIONS, X>,
+    ) -> Vector<DIMENSIONS, <T as Lerp<X>>::Output>
     where
         T: Lerp<X, Output: Copy>,
         X: Copy,
     {
-        Vector(array::from_fn(|index| {
+        Vector::new(array::from_fn(|index| {
             self.min.0[index].lerp(self.max.0[index], t.0[index])
         }))
     }
@@ -145,7 +148,7 @@ impl<T: Copy> Aabb<2, T> {
 impl<T: Copy> Aabb<3, T> {
     pub fn corner(&self, corner: usize) -> Vector<3, T> {
         let mut bit = 1;
-        Vector([Vector::x, Vector::y, Vector::z].map(|f| {
+        Vector::new([Vector::x, Vector::y, Vector::z].map(|f| {
             let v = f(if corner & bit == 0 {
                 &self.min
             } else {

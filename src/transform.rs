@@ -186,7 +186,7 @@ where
                 out[i] = out[i] + self[i][j] * rhs.0[j];
             }
         }
-        Vector(out)
+        Vector::new(out)
     }
 }
 impl<const N: usize, T> Clone for SquareMatrix<N, T>

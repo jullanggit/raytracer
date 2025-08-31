@@ -5,7 +5,7 @@ use crate::{
     indices::Indexer,
     material::{ColorKind, Material, MaterialKind},
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
-    vec3::{NormalizedVec3, Vec3, Vector},
+    vec3::{Vector, NormalizedVec3, Vec3},
 };
 
 #[inline(always)]
@@ -75,7 +75,7 @@ pub fn parse(
                 || {
                     materials.intern(Material::new(
                         MaterialKind::Lambertian,
-                        ColorKind::Solid(Vector([0.5; 3])),
+                        ColorKind::Solid(Vector::new([0.5; 3])),
                     ))
                 },
             );
@@ -221,7 +221,7 @@ fn parse_materials<'a>(
                 match (diffuse_texture, diffuse_color) {
                     (Some(diffuse_texture), _) => diffuse_texture,
                     (None, Some(diffuse_color)) => ColorKind::Solid(diffuse_color),
-                    (None, None) => ColorKind::Solid(Vector([0.5; 3])),
+                    (None, None) => ColorKind::Solid(Vector::new([0.5; 3])),
                 },
             );
 

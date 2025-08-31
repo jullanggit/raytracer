@@ -15,6 +15,9 @@
 #![feature(associated_type_defaults)]
 #![feature(step_trait)]
 #![feature(vec_into_raw_parts)]
+#![feature(specialization)]
+#![feature(macro_metavar_expr_concat)]
+#![feature(trace_macros)]
 // TODO: Remove this when optimising
 #![allow(clippy::suboptimal_flops)]
 #![allow(clippy::similar_names)]
@@ -250,7 +253,7 @@ impl Scene {
                             #[expect(clippy::integer_division)]
                             let y = offset_i / self.screen.resolution_width;
 
-                            let color = Vector(
+                            let color = Vector::new(
                                 std::iter::repeat_with(|| {
                                     let pixel_position = self.screen.top_left
                                                 + row_step * (x as f32 + f32::random() / 2.) // Add random variation
@@ -266,7 +269,7 @@ impl Scene {
                                 .take(sample_chunk_size)
                                 // average colors
                                 .reduce(|acc, element| {
-                                    Vector(array::from_fn(|index| {
+                                    Vector::new(array::from_fn(|index| {
                                         // by first adding them up
                                         acc.0[index] + element.0[index]
                                     }))
@@ -332,9 +335,9 @@ impl Scene {
                 None => {
                     let a = 0.5 * (current_ray.direction.y() + 1.0); // y scaled to 0.5-1
 
-                    let current_color = current_color.get_or_insert(Vector([1.; 3]));
+                    let current_color = current_color.get_or_insert(Vector::new([1.; 3]));
                     *current_color = *current_color
-                        * (Vector([0.2, 0.2, 0.8]) * (1.0 - a) + Vector([1.; 3]) * a);
+                        * (Vector::new([0.2, 0.2, 0.8]) * (1.0 - a) + Vector::new([1.; 3]) * a);
 
                     break;
                 }
@@ -345,17 +348,17 @@ impl Scene {
                     match shape_material.scatter(&current_ray, normal, hit_point) {
                         Scatter::Scattered(ray, color) => {
                             // calculate color of scattered ray and mix it with the current color
-                            let current_color = current_color.get_or_insert(Vector([1.; 3]));
+                            let current_color = current_color.get_or_insert(Vector::new([1.; 3]));
                             *current_color = *current_color * color.sample(texture_coordinates);
 
                             current_ray = ray;
                         }
                         Scatter::Absorbed => {
-                            current_color = Some(Vector([0.; 3]));
+                            current_color = Some(Vector::new([0.; 3]));
                             break;
                         }
                         Scatter::Light(color) => {
-                            let current_color = current_color.get_or_insert(Vector([1.; 3]));
+                            let current_color = current_color.get_or_insert(Vector::new([1.; 3]));
                             *current_color = *current_color * color.sample(texture_coordinates);
                             break;
                         }
@@ -364,7 +367,7 @@ impl Scene {
             }
         }
 
-        current_color.unwrap_or(Vector([0.; 3]))
+        current_color.unwrap_or(Vector::new([0.; 3]))
     }
 }
 

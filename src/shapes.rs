@@ -12,7 +12,7 @@ use crate::{
     indices::HasIndexer,
     indices::Indexer,
     material::Material,
-    vec3::{NormalizedVec3, Vec3, Vector},
+    vec3::{Vector, NormalizedVec3, Vec3},
 };
 
 /// The min distance an intersection has to have for it to count
@@ -108,11 +108,11 @@ impl Shape for Sphere {
     }
 
     fn min(&self) -> Vec3 {
-        self.center - Vector([self.radius; _])
+        self.center - Vector::new([self.radius; _])
     }
 
     fn max(&self) -> Vec3 {
-        self.center + Vector([self.radius; _])
+        self.center + Vector::new([self.radius; _])
     }
 }
 
@@ -170,11 +170,11 @@ impl Shape for Plane {
     }
 
     fn min(&self) -> Vec3 {
-        Vector([f32::NEG_INFINITY; 3])
+        Vector::new([f32::NEG_INFINITY; 3])
     }
 
     fn max(&self) -> Vec3 {
-        Vector([f32::INFINITY; 3])
+        Vector::new([f32::INFINITY; 3])
     }
 }
 

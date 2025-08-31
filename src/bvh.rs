@@ -3,7 +3,7 @@ use crate::{
     Ray,
     indices::Indexer,
     shapes::{Intersects, MaterialIndexer, Shape},
-    vec3::{AsConvert as _, NormalizedVec3, Vec3, Vector},
+    vec3::{AsConvert as _, Vector, NormalizedVec3, Vec3},
 };
 use std::{array, f32, marker::PhantomData, ptr, range::Range};
 
@@ -62,7 +62,10 @@ impl<T: Shape> BvhNode<T> {
         indices: impl Iterator<Item = ShapesIndexer<T>>,
     ) -> (Vec3, Vec3) {
         indices.fold(
-            (Vector([f32::INFINITY; 3]), Vector([f32::NEG_INFINITY; 3])),
+            (
+                Vector::new([f32::INFINITY; 3]),
+                Vector::new([f32::NEG_INFINITY; 3]),
+            ),
             |(prev_min, prev_max), index| {
                 let (min, max) = (index.index(shapes).min(), index.index(shapes).max());
 
