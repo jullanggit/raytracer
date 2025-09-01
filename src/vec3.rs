@@ -235,20 +235,18 @@ impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
     #[inline(always)]
     pub fn length<O>(&self) -> O
     where
-        T: Add<Output = T> + Mul<Output = T> + Sqrt<O>,
+        T: Add<Output = T> + Mul<Output = T> + Sqrt<O> + Clone,
     {
         self.length_squared().sqrt()
     }
     #[inline(always)]
     pub fn normalize<O>(self) -> NormalizedVector<DIMENSIONS, O>
     where
-        T: Add<Output = T> + Mul<Output = T> + Sqrt<O>,
+        T: Add<Output = T> + Mul<Output = T> + Sqrt<O> + Clone,
         O: Div<Output = O>,
-        Vector<DIMENSIONS, O>: From<Self>,
+        Vector<DIMENSIONS, T>: AsConvert<Vector<DIMENSIONS, O>>,
     {
-        BaseVector::<_, _, NormalizedVectorUsage>::new(
-            (Vector::<_, O>::from(self) / self.length()).into_inner(),
-        )
+        NormalizedVector::new_unchecked((self.as_convert() / self.length()).into_inner())
     }
     // TODO: move to color
     /// gamma 2 correction
@@ -259,11 +257,11 @@ impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
     {
         Self::new(self.0.map(Sqrt::sqrt))
     }
-    pub fn gram_schmidt(self, w: OldNormalizedVector<DIMENSIONS, T>) -> Self
+    pub fn gram_schmidt(self, w: NormalizedVector<DIMENSIONS, T>) -> Self
     where
         T: Add<Output = T> + Mul<Output = T> + Sub<Output = T>,
     {
-        self - *w * self.dot(*w)
+        self - w * self.dot(w)
     }
     /// Element-wise min
     #[inline(always)]
@@ -333,13 +331,14 @@ where
     Target: Copy,
 {
     #[inline(always)]
-    fn as_convert(&self) -> Vector<DIMENSIONS, Target> {
+    fn as_convert(self) -> Vector<DIMENSIONS, Target> {
         Vector::new(self.0.map(|e| e.as_convert()))
     }
 }
 impl<const DIMENSIONS: usize, T: Float> Vector<DIMENSIONS, T>
 where
     f128: AsConvert<T>,
+    T: Sqrt<T>,
 {
     #[inline(always)]
     pub fn is_normalized(&self) -> bool {
@@ -392,22 +391,25 @@ macro_rules! impl_vec_op {
 }
 impl_vec_op!((Add, add), (Sub, sub), (Mul, mul), (Div, div));
 macro_rules! access_vec {
-    ($($name:ident => $index:expr),*) => {
+    ($vector:ident, $($name:ident => $index:expr),*) => {
         $(
-            impl<const DIMENSIONS: usize, T: Copy> Vector<DIMENSIONS, T>
+            impl<const DIMENSIONS: usize, T: Clone> $vector<DIMENSIONS, T>
             where
-                // compile-time assertion on index
-               [(); DIMENSIONS - $index -1]:
+                // compile-time assertion on index (<)
+                [(); DIMENSIONS - 1 - $index]:
             {
                 #[inline(always)]
-                pub const fn $name(&self) -> T {
-                    self.0[$index]
+                pub fn $name(&self) -> T {
+                    self.0[$index].clone()
                 }
             }
         )*
     };
 }
-access_vec!(x => 0, y => 1, z => 2, w => 3);
+access_vec!(Vector, x => 0, y => 1, z => 2, w => 3);
+access_vec!(NormalizedVector, x => 0, y => 1, z => 2, w => 3);
+access_vec!(Color, r => 0, g => 1, b => 2, a => 3);
+
 /// Converts natural -> float Colors (0..MAX -> 0.0..1.0).
 impl<const DIMENSIONS: usize, N: Natural> Color<DIMENSIONS, N> {
     /// Converts natural -> float Colors (0..MAX -> 0.0..1.0).
@@ -454,11 +456,16 @@ impl From<&str> for Vec3 {
 // not generic because of the -0.5
 impl<const DIMENSIONS: usize, T> Random for NormalizedVector<DIMENSIONS, T>
 where
-    T: AsConvert<f128> + Div<Output = Self> + Copy,
+    T: AsConvert<f128> + Div<Output = T> + Copy + Sqrt<T>,
 {
     #[inline(always)]
     fn random() -> Self {
         Vector::new(array::from_fn(|_| f32::random() - 0.5.as_convert())).normalize()
+    }
+}
+impl<const DIMENSIONS: usize, T> NormalizedVector<DIMENSIONS, T> {
+    pub fn new_unchecked(vector: Vector<DIMENSIONS, T>) -> Self {
+        BaseVector(vector.into_inner(), PhantomData)
     }
 }
 impl<const DIMENSIONS: usize, T: Float> NormalizedVector<DIMENSIONS, T>
@@ -473,14 +480,14 @@ where
             vector.length::<T>()
         );
 
-        Self(vector)
+        Self::new(vector)
     }
     #[inline(always)]
     pub fn reflect(&self, normal: Self) -> Self {
         Self(**self - *normal * literal_to_float(2.) * self.dot(*normal))
     }
 }
-impl<T: Float> OldNormalizedVector<3, T>
+impl<T: Float> NormalizedVector<3, T>
 where
     f128: AsConvert<T>,
 {
@@ -519,18 +526,12 @@ pub type NormalizedVec3 = NormalizedVector<3, f32>;
 // TODO: See if DelegateTrait! can be used to create a Convert trait unifying From & TryFrom.
 /// Convert between types using `as`
 pub trait AsConvert<T> {
-    fn as_convert(&self) -> T;
+    fn as_convert(self) -> T;
 }
 macro_rules! impl_as_convert {
     // base case
     () => {};
     ($From:ident $(, $Into:ident)*) => {
-        impl AsConvert<$From> for $From {
-            fn as_convert(&self) -> $From {
-                *self
-            }
-        }
-
         $(
             impl AsConvert<$Into> for $From {
                 #[expect(clippy::allow_attributes)]
@@ -540,8 +541,8 @@ macro_rules! impl_as_convert {
                 #[allow(clippy::cast_sign_loss)]
                 #[allow(clippy::cast_possible_wrap)]
                 #[inline(always)]
-                fn as_convert(&self) -> $Into {
-                    *self as $Into
+                fn as_convert(self) -> $Into {
+                    self as $Into
                 }
             }
             impl AsConvert<$From> for $Into {
@@ -552,8 +553,8 @@ macro_rules! impl_as_convert {
                 #[allow(clippy::cast_sign_loss)]
                 #[allow(clippy::cast_possible_wrap)]
                 #[inline(always)]
-                fn as_convert(&self) -> $From {
-                    *self as $From
+                fn as_convert(self) -> $From {
+                    self as $From
                 }
             }
         )*
@@ -563,3 +564,9 @@ macro_rules! impl_as_convert {
 impl_as_convert!(
     f16, f32, f64, f128, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
 );
+
+impl<T> AsConvert<T> for T {
+    fn as_convert(self) -> T {
+        self
+    }
+}
