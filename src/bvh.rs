@@ -1,9 +1,10 @@
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
     Ray,
+    convert::Convert as _,
     indices::Indexer,
     shapes::{Intersects, MaterialIndexer, Shape},
-    vec3::{AsConvert as _, Vector, NormalizedVec3, Vec3},
+    vec3::{NormalizedVec3, Vec3, Vector},
 };
 use std::{array, f32, marker::PhantomData, ptr, range::Range};
 
@@ -196,7 +197,7 @@ impl<T: Shape> BvhNode<T> {
                 _type: PhantomData,
             };
 
-            let child_index = Indexer::new(nodes.len().as_convert());
+            let child_index = Indexer::new(nodes.len().convert());
 
             nodes.push(child);
 

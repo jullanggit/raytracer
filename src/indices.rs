@@ -6,10 +6,10 @@ use std::{
     range::Range,
 };
 
-use crate::vec3::AsConvert;
+use crate::convert::Convert;
 
 pub trait HasIndexer: Sized {
-    type IndexerType: AsConvert<usize> = usize;
+    type IndexerType: Convert<usize> = usize;
     type Data = Self;
 }
 
@@ -18,14 +18,14 @@ pub trait HasIndexer: Sized {
 #[repr(transparent)]
 pub struct Indexer<IndexerType, Data>
 where
-    IndexerType: AsConvert<usize>,
+    IndexerType: Convert<usize>,
 {
     inner: IndexerType,
     _phantom: PhantomData<Data>,
 }
 impl<IndexerType, Data> Indexer<IndexerType, Data>
 where
-    IndexerType: AsConvert<usize>,
+    IndexerType: Convert<usize>,
 {
     pub const fn new(value: IndexerType) -> Self {
         Self {
@@ -40,19 +40,19 @@ where
     where
         Collection: Index<usize, Output = Data> + ?Sized,
     {
-        collection.index(self.inner.as_convert())
+        collection.index(self.inner.convert())
     }
     pub fn index_mut<Collection>(self, collection: &mut Collection) -> &mut Data
     where
         Collection: IndexMut<usize, Output = Data> + ?Sized,
     {
-        collection.index_mut(self.inner.as_convert())
+        collection.index_mut(self.inner.convert())
     }
     pub fn index_range<Collection>(range: Range<Self>, collection: &Collection) -> &[Data]
     where
         Collection: Index<Range<usize>, Output = [Data]> + ?Sized,
     {
-        let range = Range::from(range.start.inner.as_convert()..range.end.inner.as_convert());
+        let range = Range::from(range.start.inner.convert()..range.end.inner.convert());
         collection.index(range)
     }
     pub fn index_range_mut<Collection>(
@@ -62,26 +62,23 @@ where
     where
         Collection: IndexMut<Range<usize>, Output = [Data]> + ?Sized,
     {
-        let range = Range::from(range.start.inner.as_convert()..range.end.inner.as_convert());
+        let range = Range::from(range.start.inner.convert()..range.end.inner.convert());
         collection.index_mut(range)
     }
 }
 impl<IndexerType, Data> Clone for Indexer<IndexerType, Data>
 where
-    IndexerType: AsConvert<usize> + Clone,
+    IndexerType: Convert<usize> + Clone,
 {
     fn clone(&self) -> Self {
         Self::new(self.inner.clone())
     }
 }
-impl<IndexerType, Data> Copy for Indexer<IndexerType, Data> where
-    IndexerType: AsConvert<usize> + Copy
-{
-}
+impl<IndexerType, Data> Copy for Indexer<IndexerType, Data> where IndexerType: Convert<usize> + Copy {}
 // Required for Range::iter()
 impl<IndexerType, Data> Step for Indexer<IndexerType, Data>
 where
-    IndexerType: AsConvert<usize> + Step,
+    IndexerType: Convert<usize> + Step,
 {
     fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
         Step::steps_between(&start.inner, &end.inner)
@@ -95,7 +92,7 @@ where
 }
 impl<IndexerType, Data> PartialEq for Indexer<IndexerType, Data>
 where
-    IndexerType: AsConvert<usize> + PartialEq,
+    IndexerType: Convert<usize> + PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.inner.eq(&other.inner)
@@ -103,7 +100,7 @@ where
 }
 impl<IndexerType, Data> PartialOrd for Indexer<IndexerType, Data>
 where
-    IndexerType: AsConvert<usize> + PartialOrd,
+    IndexerType: Convert<usize> + PartialOrd,
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.inner.partial_cmp(&other.inner)

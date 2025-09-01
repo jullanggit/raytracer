@@ -40,7 +40,10 @@ pub mod vec3;
 
 pub static SCENE: OnceLock<Scene> = OnceLock::new();
 
-use crate::shapes::{Plane, Sphere};
+use crate::{
+    shapes::{Plane, Sphere},
+    vec3::Color,
+};
 use std::{
     array,
     io::{Write as _, stdout},
@@ -57,7 +60,7 @@ use material::{Material, Scatter};
 use mmap::{ColorChannel, MmapFile, Pixel};
 use rng::Random as _;
 use shapes::Triangle;
-use vec3::{NormalizedVec3, ToFloatColor, ToNaturalColor as _, Vec3, Vector};
+use vec3::{NormalizedVec3, Vec3, Vector};
 
 /// A ppm p6 image
 pub struct Image {
@@ -81,7 +84,7 @@ impl Image {
     }
     fn data(&mut self) -> &mut [Pixel] {
         // SAFETY:
-        // - All bit patterns are valid Pixels
+        // All bit patterns are valid Pixels
         unsafe { self.file.as_casted_slice_mut(self.header_offset) }
     }
 }
@@ -254,7 +257,7 @@ impl Scene {
                             #[expect(clippy::integer_division)]
                             let y = offset_i / self.screen.resolution_width;
 
-                            let color = Vector::new(
+                            let color = Color::new(
                                 std::iter::repeat_with(|| {
                                     let pixel_position = self.screen.top_left
                                                 + row_step * (x as f32 + f32::random() / 2.) // Add random variation
@@ -272,23 +275,21 @@ impl Scene {
                                 .reduce(|acc, element| {
                                     Vector::new(array::from_fn(|index| {
                                         // by first adding them up
-                                        acc.0[index] + element.0[index]
+                                        acc.inner()[index] + element.inner()[index]
                                     }))
                                 })
                                 .unwrap_or_default()
-                                .0
+                                .into_inner()
                                 // and then dividing by samples
                                 .map(|e| e / sample_chunk_size as f32),
                             );
 
                             if self.incremental.is_some() || self.continue_sampling.is_some() {
                                 // average with last iteration
-                                chunk[i] =
-                                    ((ToFloatColor::<Vector<_, f32>>::to_float_color(chunk[i])
-                                        * sample_iteration as f32
-                                        + color.color_correct())
-                                        / (sample_iteration as f32 + 1.))
-                                        .to_natural_color();
+                                chunk[i] = ((chunk[i].to_float_color() * sample_iteration as f32
+                                    + color.color_correct())
+                                    / (sample_iteration as f32 + 1.))
+                                    .to_natural_color();
                             } else {
                                 chunk[i] = color.color_correct().to_natural_color();
                             }

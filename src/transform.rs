@@ -4,7 +4,7 @@ use std::{
     ops::{Add, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use crate::vec3::{AsConvert, Vector, literal_to_float};
+use crate::{convert::Convert, vec3::Vector};
 
 #[derive(Debug, PartialEq)]
 pub struct SquareMatrix<const N: usize, T>([[T; N]; N]);
@@ -18,16 +18,16 @@ impl<const N: usize, T> SquareMatrix<N, T> {
     pub fn zero() -> Self
     where
         T: Copy,
-        u8: AsConvert<T>,
+        u8: Convert<T>,
     {
-        Self([[0.as_convert(); N]; N])
+        Self([[0.convert(); N]; N])
     }
     pub fn determinant(mut self) -> T
     where
         T: PartialEq + Clone + Div<Output = T> + Mul<Output = T> + SubAssign + MulAssign,
-        u8: AsConvert<T>,
+        u8: Convert<T>,
     {
-        let zero = 0.as_convert();
+        let zero = 0.convert();
         let mut sign = true;
 
         for i in 0..N {
@@ -59,7 +59,7 @@ impl<const N: usize, T> SquareMatrix<N, T> {
                 }
             }
         }
-        let mut determinant = if sign { 1.as_convert() } else { zero };
+        let mut determinant = if sign { 1.convert() } else { zero };
         for i in 0..N {
             determinant *= self[i][i].clone();
         }
@@ -68,7 +68,7 @@ impl<const N: usize, T> SquareMatrix<N, T> {
     pub fn transpose(&self) -> Self
     where
         T: Copy,
-        u8: AsConvert<T>,
+        u8: Convert<T>,
     {
         let mut out = Self::zero();
         for i in 0..N {
@@ -82,14 +82,14 @@ impl<const N: usize, T> SquareMatrix<N, T> {
     pub fn inverse(mut self) -> Option<Self>
     where
         T: PartialEq + DivAssign + Mul<Output = T> + SubAssign + From<bool> + Clone,
-        u8: AsConvert<T>,
+        u8: Convert<T>,
     {
         let mut inv = Self::identity();
 
         for i in 0..N {
             // Find pivot
             let mut pivot_row = i;
-            while pivot_row < N && self[pivot_row][i] == 0.as_convert() {
+            while pivot_row < N && self[pivot_row][i] == 0.convert() {
                 pivot_row += 1;
             }
             if pivot_row == N {
@@ -140,7 +140,7 @@ macro_rules! implMatrixScalarOps {
             impl<const N: usize, T> $Trait<T> for SquareMatrix<N, T>
             where
                 T: $Trait<Output: Copy> + Copy,
-                u8: AsConvert<T::Output>,
+                u8: Convert<T::Output>,
             {
                 type Output = SquareMatrix<N, T::Output>;
 
@@ -175,7 +175,7 @@ where
     T1: Mul<T2> + Copy,
     <T1 as Mul<T2>>::Output: Copy + Add<Output = <T1 as Mul<T2>>::Output>,
     T2: Copy,
-    f128: AsConvert<<T1 as Mul<T2>>::Output>,
+    f128: Convert<<T1 as Mul<T2>>::Output>,
 {
     type Output = Vector<N, <T1 as Mul<T2>>::Output>;
 
@@ -208,7 +208,7 @@ impl<const N: usize, T> Transform<N, T> {
     pub fn new(m: SquareMatrix<N, T>, inv_m: SquareMatrix<N, T>) -> Self
     where
         T: Clone + Debug + PartialEq + DivAssign + Mul<Output = T> + SubAssign + From<bool>,
-        u8: AsConvert<T>,
+        u8: Convert<T>,
     {
         debug_assert_eq!(m.clone().inverse(), Some(inv_m.clone()));
 
@@ -227,7 +227,7 @@ impl<const N: usize, T> Transform<N, T> {
     pub fn transpose(self) -> Self
     where
         T: Copy,
-        u8: AsConvert<T>,
+        u8: Convert<T>,
     {
         Self {
             m: self.m.transpose(),
@@ -255,13 +255,13 @@ impl<const N: usize, T> Transform<N, T> {
     pub fn scale(scale: Vector<{ N - 1 }, T>) -> Self
     where
         T: From<bool> + Copy + Div<Output = T>,
-        u8: AsConvert<T>,
+        u8: Convert<T>,
     {
         let mut out = SquareMatrix::default();
         let mut out_inv = SquareMatrix::default();
         for i in 0..N - 1 {
             out[i][i] = scale.0[i];
-            out_inv[i][i] = 1.as_convert() / scale.0[i];
+            out_inv[i][i] = 1.convert() / scale.0[i];
         }
 
         Self {
@@ -285,7 +285,7 @@ where
 impl<const N: usize, T> TryFrom<SquareMatrix<N, T>> for Transform<N, T>
 where
     T: Copy + PartialEq + DivAssign + Mul<Output = T> + SubAssign + From<bool>,
-    u8: AsConvert<T>,
+    u8: Convert<T>,
 {
     type Error = &'static str;
     fn try_from(value: SquareMatrix<N, T>) -> Result<Self, Self::Error> {

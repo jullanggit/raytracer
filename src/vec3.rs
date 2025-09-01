@@ -185,16 +185,31 @@ macro_rules! VectorLabels {
 }
 VectorLabels!(Vector, Point, Normal, NormalizedVector, Color);
 
+pub trait New<Input> {
+    fn new(input: Input) -> Self;
+}
+
 #[repr(transparent)]
 #[derive(PartialEq)]
 pub struct BaseVector<const DIMENSIONS: usize, T, USAGE>([T; DIMENSIONS], PhantomData<USAGE>);
-impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
-    #[inline(always)]
-    pub fn new(array: [T; DIMENSIONS]) -> Self {
-        Self(array, PhantomData)
-    }
+impl<const DIMENSIONS: usize, T, Usage> BaseVector<DIMENSIONS, T, Usage> {
     pub fn into_inner(self) -> [T; DIMENSIONS] {
         self.0
+    }
+    pub fn inner(&self) -> &[T; DIMENSIONS] {
+        &self.0
+    }
+}
+
+impl<const DIMENSIONS: usize, T, Usage> New<[T; DIMENSIONS]> for BaseVector<DIMENSIONS, T, Usage> {
+    #[inline(always)]
+    default fn new(array: [T; DIMENSIONS]) -> Self {
+        Self(array, PhantomData)
+    }
+}
+impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
+    pub fn inner_mut(&mut self) -> &mut [T; DIMENSIONS] {
+        &mut self.0
     }
     #[inline(always)]
     pub fn combine<F, O>(self, other: &Self, f: F) -> Vector<DIMENSIONS, O>
@@ -240,15 +255,6 @@ impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
         Vector<DIMENSIONS, T>: Convert<Vector<DIMENSIONS, O>>,
     {
         NormalizedVector::new_unchecked((self.convert() / self.length()).into_inner())
-    }
-    // TODO: move to color
-    /// gamma 2 correction
-    #[inline(always)]
-    pub fn color_correct(self) -> Self
-    where
-        T: Sqrt,
-    {
-        Self::new(self.0.map(Sqrt::sqrt))
     }
     pub fn gram_schmidt(self, w: NormalizedVector<DIMENSIONS, T>) -> Self
     where
@@ -405,11 +411,21 @@ access_vec!(Vector, x => 0, y => 1, z => 2, w => 3);
 access_vec!(NormalizedVector, x => 0, y => 1, z => 2, w => 3);
 access_vec!(Color, r => 0, g => 1, b => 2, a => 3);
 
+impl<const DIMENSIONS: usize, T> Color<DIMENSIONS, T> {
+    /// gamma 2 correction
+    #[inline(always)]
+    pub fn color_correct(self) -> Self
+    where
+        T: Sqrt,
+    {
+        BaseVector(self.0.map(Sqrt::sqrt), PhantomData)
+    }
+}
 /// Converts natural -> float Colors (0..MAX -> 0.0..1.0).
 impl<const DIMENSIONS: usize, N: Natural> Color<DIMENSIONS, N> {
     /// Converts natural -> float Colors (0..MAX -> 0.0..1.0).
     #[inline(always)]
-    fn to_float_color<F: Float>(self) -> Vector<DIMENSIONS, F>
+    pub fn to_float_color<F: Float>(self) -> Vector<DIMENSIONS, F>
     where
         N: Convert<F>,
     {
@@ -422,7 +438,7 @@ where
 {
     /// Converts float -> natural Colors ( 0.0..1.0 -> 0..MAX).
     #[inline(always)]
-    fn to_natural_color<N: Convert<F> + Natural>(self) -> Vector<DIMENSIONS, N>
+    pub fn to_natural_color<N: Convert<F> + Natural>(self) -> Vector<DIMENSIONS, N>
     where
         F: Convert<N>,
     {
@@ -445,44 +461,43 @@ impl From<&str> for Vec3 {
     }
 }
 
-// not generic because of the -0.5
 impl<const DIMENSIONS: usize, T> Random for NormalizedVector<DIMENSIONS, T>
 where
-    T: Div<Output = T> + Copy + Sqrt<T>,
-    f16: Convert<T>,
+    T: Div<Output = T> + Copy + Sqrt<T> + Add<Output = T> + Mul<Output = T>,
+    f32: Convert<T>,
 {
     #[inline(always)]
     fn random() -> Self {
-        Vector::new(array::from_fn(|_| f32::random() - 0.5.convert())).normalize()
+        Vector::new(array::from_fn(|_| (f32::random() - 0.5).convert())).normalize()
     }
 }
 impl<const DIMENSIONS: usize, T> NormalizedVector<DIMENSIONS, T> {
-    pub fn new_unchecked(vector: Vector<DIMENSIONS, T>) -> Self {
-        BaseVector(vector.into_inner(), PhantomData)
-    }
-}
-impl<const DIMENSIONS: usize, T: Float> NormalizedVector<DIMENSIONS, T>
-where
-    u8: Convert<T>,
-{
-    #[inline(always)]
-    pub fn new(vector: Vector<DIMENSIONS, T>) -> Self {
-        debug_assert!(
-            vector.is_normalized(),
-            "vector: {vector:?}, len: {:?}",
-            vector.length::<T>()
-        );
-
-        Self::new(vector)
+    pub fn new_unchecked(vector: [T; DIMENSIONS]) -> Self {
+        BaseVector(vector, PhantomData)
     }
     #[inline(always)]
     pub fn reflect(&self, normal: Self) -> Self {
-        Self(**self - *normal * 2.convert() * self.dot(*normal))
+        Self::new_unchecked(**self - *normal * 2.convert() * self.dot(*normal))
+    }
+}
+impl<const DIMENSIONS: usize, T: Float> New<[T; DIMENSIONS]> for NormalizedVector<DIMENSIONS, T>
+where
+    f16: Convert<T>,
+{
+    #[inline(always)]
+    fn new(vector: [T; DIMENSIONS]) -> Self {
+        debug_assert!(
+            Vector::new(vector).is_normalized(),
+            "vector: {vector:?}, len: {:?}",
+            Vector::new(vector).length::<T>()
+        );
+
+        Self(vector, PhantomData)
     }
 }
 impl<T: Float> NormalizedVector<3, T>
 where
-    u8: Convert<T>,
+    i8: Convert<T>,
 {
     #[inline(always)]
     pub fn coordinate_system(self) -> [Self; 2] {
@@ -491,7 +506,7 @@ where
         let b = self.x() * self.y() * a;
 
         [
-            Self(Vector::new([
+            Self::new_unchecked(Vector::new([
                 1.convert() + sign * self.x().sqrt() * a,
                 sign * b,
                 -sign * self.x(),

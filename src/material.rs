@@ -5,7 +5,7 @@ use crate::{
     indices::HasIndexer,
     mmap::Pixel,
     rng::Random as _,
-    vec3::{Lerp as _, NormalizedVec3, Vec3, Vector},
+    vec3::{Color, Lerp as _, NormalizedVec3, Vec3, Vector},
 };
 
 #[derive(Debug, PartialEq)]
@@ -30,7 +30,7 @@ impl Material {
 
         match self.kind {
             MaterialKind::Lambertian => {
-                let direction = (*normal + *NormalizedVec3::random()).normalize::<f32>();
+                let direction = (*normal + NormalizedVec3::random()).normalize::<f32>();
 
                 Scatter::Scattered(
                     Ray::new(
@@ -175,7 +175,7 @@ impl ColorKind {
             .into_iter()
             .skip(base + 4)
             .array_chunks()
-            .map(Vector)
+            .map(Color::new)
             .collect();
 
         assert_eq!(data.len(), width as usize * height as usize);

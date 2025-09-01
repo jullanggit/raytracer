@@ -1,4 +1,4 @@
-use crate::vec3::{Vector, Lerp, MinMax, Sqrt};
+use crate::vec3::{Lerp, MinMax, New, Sqrt, Vector};
 use std::{
     array,
     cmp::Ordering,
@@ -36,23 +36,28 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
         T: PartialOrd,
     {
         (0..DIMENSIONS).all(|index| {
-            self.max.0[index] >= other.min.0[index] && self.min.0[index] <= other.max.0[index]
+            self.max.inner()[index] >= other.min.inner()[index]
+                && self.min.inner()[index] <= other.max.inner()[index]
         })
     }
     pub fn contains(&self, point: Vector<DIMENSIONS, T>) -> bool
     where
         T: PartialOrd,
     {
-        (0..DIMENSIONS)
-            .all(|index| point.0[index] >= self.min.0[index] && point.0[index] <= self.max.0[index])
+        (0..DIMENSIONS).all(|index| {
+            point.inner()[index] >= self.min.inner()[index]
+                && point.inner()[index] <= self.max.inner()[index]
+        })
     }
     /// upper boundaries not included
     pub fn contains_exclusive(&self, point: Vector<DIMENSIONS, T>) -> bool
     where
         T: PartialOrd,
     {
-        (0..DIMENSIONS)
-            .all(|index| point.0[index] >= self.min.0[index] && point.0[index] < self.max.0[index])
+        (0..DIMENSIONS).all(|index| {
+            point.inner()[index] >= self.min.inner()[index]
+                && point.inner()[index] < self.max.inner()[index]
+        })
     }
     pub fn distance_squared(&self, point: Vector<DIMENSIONS, T>) -> T
     where
@@ -61,8 +66,8 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
         (0..DIMENSIONS)
             .map(|index| {
                 (<T as Sub>::Output::from(0))
-                    .max(self.min.0[index] - point.0[index])
-                    .max(point.0[index] - self.max.0[index])
+                    .max(self.min.inner()[index] - point.inner()[index])
+                    .max(point.inner()[index] - self.max.inner()[index])
             })
             .map(|value| value.clone() * value)
             .reduce(|acc, e| acc + e)
@@ -98,21 +103,19 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
         T: Sub<Output: Copy + PartialOrd>,
     {
         let d = self.diagonal();
-        d.0.into_iter()
+        d.inner()
+            .into_iter()
             .max_by(|e1, e2| e1.partial_cmp(e2).unwrap_or(Ordering::Equal))
             .unwrap()
     }
     /// Interpolate between the corners by t dimension-wise
-    pub fn lerp<X>(
-        &self,
-        t: Vector<DIMENSIONS, X>,
-    ) -> Vector<DIMENSIONS, <T as Lerp<X>>::Output>
+    pub fn lerp<X>(&self, t: Vector<DIMENSIONS, X>) -> Vector<DIMENSIONS, <T as Lerp<X>>::Output>
     where
         T: Lerp<X, Output: Copy>,
         X: Copy,
     {
         Vector::new(array::from_fn(|index| {
-            self.min.0[index].lerp(self.max.0[index], t.0[index])
+            self.min.inner()[index].lerp(self.max.inner()[index], t.inner()[index])
         }))
     }
     /// The position of `point` relative to the corners.
@@ -123,8 +126,9 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
     {
         let mut out = point - self.min;
         for index in 0..DIMENSIONS {
-            if self.max.0[index] > self.min.0[index] {
-                out.0[index] = out.0[index] / (self.max.0[index] - self.min.0[index]);
+            if self.max.inner()[index] > self.min.inner()[index] {
+                out.inner_mut()[index] =
+                    out.inner()[index] / (self.max.inner()[index] - self.min.inner()[index]);
             }
         }
         out
@@ -133,7 +137,7 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
     where
         T: PartialOrd,
     {
-        (0..DIMENSIONS).any(|index| self.min.0[index] >= self.max.0[index])
+        (0..DIMENSIONS).any(|index| self.min.inner()[index] >= self.max.inner()[index])
     }
 }
 impl<T: Copy> Aabb<2, T> {

@@ -6,7 +6,7 @@ use std::{
     ptr, slice,
 };
 
-use crate::vec3::Vector;
+use crate::vec3::{Color, Vector};
 
 // sys/mman.h
 const MAP_FAILED: *mut c_void = usize::MAX as *mut c_void; // (void *) -1
@@ -31,7 +31,7 @@ unsafe extern "C" {
 }
 
 pub type ColorChannel = u8;
-pub type Pixel = Vector<3, ColorChannel>;
+pub type Pixel = Color<3, ColorChannel>;
 
 pub struct MmapFile {
     ptr: *mut u8,

@@ -3,11 +3,12 @@ use std::str::Split;
 use crate::{
     Bvhs, Camera, Plane, Scene, Screen, Shapes, Sphere,
     bvh::BvhNode,
+    convert::Convert,
     indices::{HasIndexer, Indexer},
     material::{ColorKind, Material},
     obj,
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
-    vec3::{AsConvert, Vec3},
+    vec3::Vec3,
 };
 
 #[expect(clippy::too_many_lines)]
@@ -155,10 +156,11 @@ fn push_material_with_values(
 
 pub struct Interner<T: HasIndexer + PartialEq>(Vec<T>)
 where
-    usize: AsConvert<T::IndexerType>;
+    usize: Convert<T::IndexerType>;
+
 impl<T: HasIndexer + PartialEq> Interner<T>
 where
-    usize: AsConvert<T::IndexerType>,
+    usize: Convert<T::IndexerType>,
 {
     pub fn intern(&mut self, value: T) -> Indexer<T::IndexerType, T::Data> {
         Indexer::new(
@@ -170,7 +172,7 @@ where
                     self.0.push(value);
                     index
                 })
-                .as_convert(),
+                .convert(),
         )
     }
 }
