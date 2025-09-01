@@ -5,7 +5,7 @@ use crate::{
     indices::HasIndexer,
     mmap::Pixel,
     rng::Random as _,
-    vec3::{Vector, Lerp as _, NormalizedVec3, ToFloatColor as _, Vec3},
+    vec3::{Lerp as _, NormalizedVec3, Vec3, Vector},
 };
 
 #[derive(Debug, PartialEq)]
