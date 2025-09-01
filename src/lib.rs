@@ -27,6 +27,7 @@
 pub mod aabb;
 pub mod bvh;
 pub mod config;
+pub mod convert;
 pub mod cpu_affinity;
 pub mod indices;
 pub mod material;
