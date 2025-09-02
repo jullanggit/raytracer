@@ -4,6 +4,7 @@ use std::{
     marker::PhantomData,
     num::FpCategory,
     ops::{Add, AddAssign, Div, Mul, Neg, Sub},
+    str::FromStr,
 };
 
 use crate::{convert::Convert, rng::Random};
@@ -88,7 +89,6 @@ impl<Source: Convert<Output>, Output: Float> Sqrt<Output> for Source {
 
 /// Creates Trait & implementations that delegate the trait's methods to one of the two other given traits.
 /// Uses something like a poor man's lattice Trait implementation, based on a #![feature(specialization)] hack. Throws a link-time error if neither of the traits are implemented.
-#[expect(unused_macros)]
 macro_rules! DelegateTrait {
     (pub trait $trait:ident $(<$($generic:ident $(= $default:ty)?),+>)? {
         $(
@@ -142,6 +142,8 @@ macro_rules! DelegateTrait {
                     unsafe extern "C" {
                         fn ${concat(__neither, $a, Nor, $b, Implemented)}() -> !;
                     }
+                    // SAFETY:
+                    // yeah not really safe, fingers crossed this symbol is undefined and raises a link-time-error
                     unsafe {
                         ${concat(__neither, $a, Nor, $b, Implemented)}()
                     }
@@ -178,12 +180,16 @@ macro_rules! VectorLabels {
     ($($label:ident),+) => {
         $(
             #[derive(Clone, Copy, Debug, PartialEq)]
-            struct ${ concat($label, Usage) };
-            pub type $label<const DIMENSIONS: usize, T: Copy> = BaseVector<DIMENSIONS, T, ${concat($label, Usage)}>;
+            pub struct ${ concat($label, Usage) };
+            pub type $label<const DIMENSIONS: usize, T> = BaseVector<DIMENSIONS, T, ${concat($label, Usage)}>;
         )+
     };
 }
 VectorLabels!(Vector, Point, Normal, NormalizedVector, Color);
+
+pub trait VectorOrColor {}
+impl VectorOrColor for VectorUsage {}
+impl VectorOrColor for ColorUsage {}
 
 pub trait New<Input> {
     fn new(input: Input) -> Self;
@@ -191,54 +197,34 @@ pub trait New<Input> {
 
 #[repr(transparent)]
 #[derive(PartialEq)]
-pub struct BaseVector<const DIMENSIONS: usize, T, USAGE>([T; DIMENSIONS], PhantomData<USAGE>);
+pub struct BaseVector<const DIMENSIONS: usize, T, Usage>([T; DIMENSIONS], PhantomData<Usage>);
 impl<const DIMENSIONS: usize, T, Usage> BaseVector<DIMENSIONS, T, Usage> {
     pub fn into_inner(self) -> [T; DIMENSIONS] {
         self.0
     }
-    pub fn inner(&self) -> &[T; DIMENSIONS] {
+    pub const fn inner(&self) -> &[T; DIMENSIONS] {
         &self.0
     }
-}
-
-impl<const DIMENSIONS: usize, T, Usage> New<[T; DIMENSIONS]> for BaseVector<DIMENSIONS, T, Usage> {
-    #[inline(always)]
-    default fn new(array: [T; DIMENSIONS]) -> Self {
-        Self(array, PhantomData)
-    }
-}
-impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
-    pub fn inner_mut(&mut self) -> &mut [T; DIMENSIONS] {
-        &mut self.0
-    }
-    #[inline(always)]
-    pub fn combine<F, O>(self, other: &Self, f: F) -> Vector<DIMENSIONS, O>
-    where
-        T: Clone,
-        F: Fn(T, T) -> O,
-        O: Clone,
-    {
-        Vector::new(array::from_fn(|index| {
-            f(self.0[index].clone(), other.0[index].clone())
-        }))
-    }
-    #[inline(always)]
-    pub fn dot(self, other: Self) -> T
-    where
-        T: Add<Output = T> + Mul<Output = T>,
-    {
-        (self * other)
-            .0
-            .into_iter()
-            .reduce(|acc, e| acc + e)
-            .unwrap()
+    pub fn to_vector(self) -> Vector<DIMENSIONS, T> {
+        Vector::new(self.into_inner())
     }
     #[inline(always)]
     pub fn length_squared(&self) -> T
     where
         T: Add<Output = T> + Mul<Output = T> + Clone,
     {
-        self.dot(self.clone())
+        self.clone().dot(self.clone())
+    }
+    #[inline(always)]
+    pub fn dot<Usage2>(self, other: BaseVector<DIMENSIONS, T, Usage2>) -> T
+    where
+        T: Add<Output = T> + Mul<Output = T> + Clone,
+    {
+        (self.to_vector() * other.to_vector())
+            .into_inner()
+            .into_iter()
+            .reduce(|acc, e| acc + e)
+            .unwrap()
     }
     #[inline(always)]
     pub fn length<O>(&self) -> O
@@ -247,26 +233,53 @@ impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
     {
         self.length_squared().sqrt()
     }
+}
+
+impl<const DIMENSIONS: usize, T, Usage> New<[T; DIMENSIONS]> for BaseVector<DIMENSIONS, T, Usage> {
+    #[inline(always)]
+    default fn new(input: [T; DIMENSIONS]) -> Self {
+        Self(input, PhantomData)
+    }
+}
+impl<const DIMENSIONS: usize, T, Usage: VectorOrColor> BaseVector<DIMENSIONS, T, Usage> {
+    // dont expost mutable references for Normals, NormalizedVectors etc.
+    pub const fn inner_mut(&mut self) -> &mut [T; DIMENSIONS] {
+        &mut self.0
+    }
+    /// Combine `self` with `other`, using `f`
+    #[inline(always)]
+    pub fn combine<F, O>(self, other: &Self, f: F) -> BaseVector<DIMENSIONS, O, Usage>
+    where
+        T: Clone,
+        F: Fn(T, T) -> O,
+        O: Clone,
+    {
+        BaseVector::new(array::from_fn(|index| {
+            f(self.0[index].clone(), other.0[index].clone())
+        }))
+    }
+}
+impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
     #[inline(always)]
     pub fn normalize<O>(self) -> NormalizedVector<DIMENSIONS, O>
     where
-        T: Add<Output = T> + Mul<Output = T> + Sqrt<O> + Clone,
-        O: Div<Output = O>,
-        Vector<DIMENSIONS, T>: Convert<Vector<DIMENSIONS, O>>,
+        T: Add<Output = T> + Mul<Output = T> + Sqrt<O> + Clone + Convert<O>,
+        O: Div<Output = O> + Clone,
     {
-        NormalizedVector::new_unchecked((self.convert() / self.length()).into_inner())
+        NormalizedVector::new_unchecked((self.clone().convert() / self.length()).into_inner())
     }
     pub fn gram_schmidt(self, w: NormalizedVector<DIMENSIONS, T>) -> Self
     where
-        T: Add<Output = T> + Mul<Output = T> + Sub<Output = T>,
+        T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone,
     {
-        self - w * self.dot(w)
+        let w = w.to_vector();
+        self.clone() - w.clone() * self.dot(w)
     }
     /// Element-wise min
     #[inline(always)]
     pub fn min(self, other: Self) -> Self
     where
-        T: MinMax,
+        T: MinMax + Clone,
     {
         self.combine(&other, MinMax::min)
     }
@@ -274,7 +287,7 @@ impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
     #[inline(always)]
     pub fn max(self, other: Self) -> Self
     where
-        T: MinMax,
+        T: MinMax + Clone,
     {
         self.combine(&other, MinMax::max)
     }
@@ -284,23 +297,32 @@ impl<T> Vector<3, T> {
     #[inline(always)]
     pub fn cross(self, other: Self) -> Self
     where
-        T: Mul<Output: Sub<Output = T> + Copy>,
+        T: Mul<Output: Sub<Output = T> + Clone> + Clone,
     {
-        let yzx = |vector: Self| Self::new([vector.y(), vector.z(), vector.x()]);
-        let zxy = |vector: Self| Self::new([vector.z(), vector.x(), vector.y()]);
+        let yzx = |vector: Self| {
+            let mut inner = vector.into_inner(); // xyz
+            inner.swap(0, 2); // zyx
+            inner.swap(0, 1); // yzx
+            Self::new(inner)
+        };
+        let zxy = |vector: Self| {
+            let mut inner = vector.into_inner(); // xyz
+            inner.swap(0, 1); // yxz
+            inner.swap(0, 2); // zxy
+            Self::new(inner)
+        };
 
-        yzx(self) * zxy(other) - zxy(self) * yzx(other)
+        yzx(self.clone()) * zxy(other.clone()) - zxy(self) * yzx(other)
     }
 }
-impl<const DIMENSIONS: usize, T> Neg for Vector<DIMENSIONS, T>
+impl<const DIMENSIONS: usize, T, Usage> Neg for BaseVector<DIMENSIONS, T, Usage>
 where
-    T: Copy + Neg,
-    T::Output: Copy,
+    T: Neg,
 {
-    type Output = Vector<DIMENSIONS, T::Output>;
+    type Output = BaseVector<DIMENSIONS, T::Output, Usage>;
     #[inline(always)]
     fn neg(self) -> Self::Output {
-        Vector::new(self.0.map(Neg::neg))
+        BaseVector::new(self.0.map(Neg::neg))
     }
 }
 impl<const DIMENSIONS: usize, T> Default for Vector<DIMENSIONS, T>
@@ -313,7 +335,7 @@ where
     }
 }
 
-impl<const DIMENSIONS: usize, T> Clone for Vector<DIMENSIONS, T>
+impl<const DIMENSIONS: usize, T, Usage> Clone for BaseVector<DIMENSIONS, T, Usage>
 where
     T: Clone,
 {
@@ -321,14 +343,22 @@ where
         Self(self.0.clone(), PhantomData)
     }
 }
-impl<const DIMENSIONS: usize, T> Copy for Vector<DIMENSIONS, T> where T: Copy {}
+impl<const DIMENSIONS: usize, T, Usage> Copy for BaseVector<DIMENSIONS, T, Usage> where T: Copy {}
+
+impl<const DIMENSIONS: usize, T, Usage> Debug for BaseVector<DIMENSIONS, T, Usage>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Vector {:?}", self.0)
+    }
+}
 
 impl<const DIMENSIONS: usize, Source> Vector<DIMENSIONS, Source> {
     #[inline(always)]
     fn convert<Target>(self) -> Vector<DIMENSIONS, Target>
     where
-        Source: Convert<Target> + Copy,
-        Target: Copy,
+        Source: Convert<Target>,
     {
         Vector::new(self.0.map(|e| e.convert()))
     }
@@ -342,9 +372,8 @@ where
     where
         f16: Convert<T>,
     {
-        const TOLERANCE: f128 = 1e-5;
-        self.length::<T>() <= (1. + TOLERANCE).convert()
-            && self.length::<T>() >= (1. - TOLERANCE).convert()
+        const TOLERANCE: f16 = 1e-5;
+        self.length() <= (1. + TOLERANCE).convert() && self.length() >= (1. - TOLERANCE).convert()
     }
     #[inline(always)]
     pub fn near_zero(&self) -> bool {
@@ -365,43 +394,79 @@ where
 macro_rules! impl_vec_op {
     ($(($Trait:ident, $method:ident)),*) => {
         $(
-            impl<const DIMENSIONS: usize, T> $Trait for Vector<DIMENSIONS, T>
+            impl<const DIMENSIONS: usize, T, Usage: VectorOrColor> $Trait for BaseVector<DIMENSIONS, T, Usage>
             where
-                T: $Trait + Copy,
-                T::Output: Copy
+                T: $Trait + Clone,
+                T::Output: Clone,
             {
-                type Output = Vector<DIMENSIONS, T::Output>;
+                type Output = BaseVector<DIMENSIONS, T::Output, Usage>;
                 #[inline(always)]
                 fn $method(self, rhs: Self) -> Self::Output {
                     self.combine(&rhs, $Trait::$method)
                 }
             }
-            impl<const DIMENSIONS: usize, T> $Trait<T> for Vector<DIMENSIONS, T>
+            impl<const DIMENSIONS: usize, T, Usage: VectorOrColor> $Trait<T> for BaseVector<DIMENSIONS, T, Usage>
             where
-                T: $Trait + Copy,
-                T::Output: Copy
+                T: $Trait + Clone,
+                T::Output: Clone,
+            {
+                type Output = BaseVector<DIMENSIONS, T::Output, Usage>;
+                #[inline(always)]
+                fn $method(self, rhs: T) -> Self::Output {
+                    BaseVector::new(self.0.map(|e| e.$method(rhs.clone())))
+                }
+            }
+
+            /// Normalized Vector
+            impl<const DIMENSIONS: usize, T> $Trait for NormalizedVector<DIMENSIONS, T>
+            where
+                T: $Trait + Clone,
+                T::Output: Clone,
+            {
+                type Output = Vector<DIMENSIONS, T::Output>;
+                #[inline(always)]
+                fn $method(self, rhs: Self) -> Self::Output {
+                    self.to_vector().combine(&rhs.to_vector(), $Trait::$method)
+                }
+            }
+            impl<const DIMENSIONS: usize, T, > $Trait<T> for NormalizedVector<DIMENSIONS, T>
+            where
+                T: $Trait + Clone,
+                T::Output: Clone,
             {
                 type Output = Vector<DIMENSIONS, T::Output>;
                 #[inline(always)]
                 fn $method(self, rhs: T) -> Self::Output {
-                    Vector::new(self.0.map(|e| e.$method(rhs)))
+                    BaseVector::new(self.0.map(|e| e.$method(rhs.clone())))
+                }
+            }
+            impl<const DIMENSIONS: usize, T> $Trait<Vector<DIMENSIONS, T>> for NormalizedVector<DIMENSIONS, T>
+            where
+                T: $Trait + Clone,
+                T::Output: Clone,
+            {
+                type Output = Vector<DIMENSIONS, T::Output>;
+                #[inline(always)]
+                fn $method(self, rhs: Vector<DIMENSIONS, T>) -> Self::Output {
+                    self.to_vector().combine(&rhs, $Trait::$method)
                 }
             }
         )*
     };
 }
 impl_vec_op!((Add, add), (Sub, sub), (Mul, mul), (Div, div));
+
 macro_rules! access_vec {
     ($vector:ident, $($name:ident => $index:expr),*) => {
         $(
-            impl<const DIMENSIONS: usize, T: Clone> $vector<DIMENSIONS, T>
+            impl<const DIMENSIONS: usize, T> $vector<DIMENSIONS, T>
             where
                 // compile-time assertion on index (<)
                 [(); DIMENSIONS - 1 - $index]:
             {
                 #[inline(always)]
-                pub fn $name(&self) -> T {
-                    self.0[$index].clone()
+                pub fn $name(&self) -> &T {
+                    &self.0[$index]
                 }
             }
         )*
@@ -425,11 +490,11 @@ impl<const DIMENSIONS: usize, T> Color<DIMENSIONS, T> {
 impl<const DIMENSIONS: usize, N: Natural> Color<DIMENSIONS, N> {
     /// Converts natural -> float Colors (0..MAX -> 0.0..1.0).
     #[inline(always)]
-    pub fn to_float_color<F: Float>(self) -> Vector<DIMENSIONS, F>
+    pub fn to_float_color<F: Float>(self) -> Color<DIMENSIONS, F>
     where
         N: Convert<F>,
     {
-        Vector::new(self.0.map(|natural| natural.convert() / N::MAX.convert()))
+        Color::new(self.0.map(|natural| natural.convert() / N::MAX.convert()))
     }
 }
 impl<const DIMENSIONS: usize, F: Float> Color<DIMENSIONS, F>
@@ -438,11 +503,11 @@ where
 {
     /// Converts float -> natural Colors ( 0.0..1.0 -> 0..MAX).
     #[inline(always)]
-    pub fn to_natural_color<N: Convert<F> + Natural>(self) -> Vector<DIMENSIONS, N>
+    pub fn to_natural_color<N: Convert<F> + Natural>(self) -> Color<DIMENSIONS, N>
     where
         F: Convert<N>,
     {
-        Vector::new(self.0.map(|float| {
+        Color::new(self.0.map(|float| {
             debug_assert!(float >= 0.0.convert());
             debug_assert!(float <= 1.0.convert());
 
@@ -453,7 +518,7 @@ where
 
 pub type Vec3 = Vector<3, f32>;
 
-impl From<&str> for Vec3 {
+impl<Usage: VectorOrColor, T: FromStr<Err: Debug>> From<&str> for BaseVector<3, T, Usage> {
     fn from(value: &str) -> Self {
         let mut values = value.split(' ').map(|value| value.parse().unwrap());
 
@@ -476,8 +541,17 @@ impl<const DIMENSIONS: usize, T> NormalizedVector<DIMENSIONS, T> {
         BaseVector(vector, PhantomData)
     }
     #[inline(always)]
-    pub fn reflect(&self, normal: Self) -> Self {
-        Self::new_unchecked(**self - *normal * 2.convert() * self.dot(*normal))
+    pub fn reflect(self, normal: Self) -> Self
+    where
+        T: Mul<Output = T> + Clone + Add<Output = T> + Sub<Output = T>,
+        u8: Convert<T>,
+    {
+        let this = self.to_vector();
+        let normal = normal.to_vector();
+
+        Self::new_unchecked(
+            (this.clone() - normal.clone() * 2.convert() * this.dot(normal)).into_inner(),
+        )
     }
 }
 impl<const DIMENSIONS: usize, T: Float> New<[T; DIMENSIONS]> for NormalizedVector<DIMENSIONS, T>
@@ -495,23 +569,40 @@ where
         Self(vector, PhantomData)
     }
 }
+impl<const DIMENSIONS: usize, T: Float> New<Vector<DIMENSIONS, T>>
+    for NormalizedVector<DIMENSIONS, T>
+where
+    f16: Convert<T>,
+{
+    #[inline(always)]
+    fn new(vector: Vector<DIMENSIONS, T>) -> Self {
+        debug_assert!(
+            vector.is_normalized(),
+            "vector: {vector:?}, len: {:?}",
+            vector.length::<T>()
+        );
+
+        Self(vector.into_inner(), PhantomData)
+    }
+}
 impl<T: Float> NormalizedVector<3, T>
 where
+    T: Clone,
     i8: Convert<T>,
 {
     #[inline(always)]
     pub fn coordinate_system(self) -> [Self; 2] {
-        let sign = T::copysign(1.convert(), self.z());
-        let a = (-1).convert() / (sign + self.z());
-        let b = self.x() * self.y() * a;
+        let sign = T::copysign(1.convert(), self.z().clone());
+        let a = (-1).convert() / (sign + self.z().clone());
+        let b = self.x().clone() * self.y().clone() * a;
 
         [
-            Self::new_unchecked(Vector::new([
+            Self::new_unchecked([
                 1.convert() + sign * self.x().sqrt() * a,
                 sign * b,
-                -sign * self.x(),
-            ])),
-            Self(Vector::new([b, sign + self.y().sqrt() * a, -self.y()])),
+                -sign * self.x().clone(),
+            ]),
+            Self::new_unchecked([b, sign + self.y().sqrt() * a, -self.y().clone()]),
         ]
     }
     #[inline(always)]

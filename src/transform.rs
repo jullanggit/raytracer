@@ -1,10 +1,13 @@
 use std::{
     array,
     fmt::Debug,
-    ops::{Add, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+    ops::{Add, AddAssign, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use crate::{convert::Convert, vec3::Vector};
+use crate::{
+    convert::Convert,
+    vec3::{New, Vector},
+};
 
 #[derive(Debug, PartialEq)]
 pub struct SquareMatrix<const N: usize, T>([[T; N]; N]);
@@ -170,20 +173,18 @@ impl<const N: usize, T> DerefMut for SquareMatrix<N, T> {
         &mut self.0
     }
 }
-impl<const N: usize, T1, T2> Mul<Vector<N, T2>> for SquareMatrix<N, T1>
+impl<const N: usize, T> Mul<Vector<N, T>> for SquareMatrix<N, T>
 where
-    T1: Mul<T2> + Copy,
-    <T1 as Mul<T2>>::Output: Copy + Add<Output = <T1 as Mul<T2>>::Output>,
-    T2: Copy,
-    f128: Convert<<T1 as Mul<T2>>::Output>,
+    T: AddAssign + Clone + Mul<Output = T>,
+    u8: Convert<T>,
 {
-    type Output = Vector<N, <T1 as Mul<T2>>::Output>;
+    type Output = Vector<N, T>;
 
-    fn mul(self, rhs: Vector<N, T2>) -> Self::Output {
-        let mut out: [<T1 as Mul<T2>>::Output; _] = [literal_to_float(0.); N];
+    fn mul(self, rhs: Vector<N, T>) -> Self::Output {
+        let mut out: [T; _] = array::from_fn(|_| 0.convert());
         for i in 0..N {
             for j in 0..N {
-                out[i] = out[i] + self[i][j] * rhs.0[j];
+                out[i] += self[i][j].clone() * rhs.inner()[j].clone();
             }
         }
         Vector::new(out)
@@ -243,8 +244,8 @@ impl<const N: usize, T> Transform<N, T> {
         let mut out = SquareMatrix::default();
         let mut out_inv = SquareMatrix::default();
         for i in 0..N - 1 {
-            out[i][N - 1] = delta.0[i];
-            out_inv[i][N - 1] = -delta.0[i];
+            out[i][N - 1] = delta.inner()[i];
+            out_inv[i][N - 1] = -delta.inner()[i];
         }
 
         Self {
@@ -260,8 +261,8 @@ impl<const N: usize, T> Transform<N, T> {
         let mut out = SquareMatrix::default();
         let mut out_inv = SquareMatrix::default();
         for i in 0..N - 1 {
-            out[i][i] = scale.0[i];
-            out_inv[i][i] = 1.convert() / scale.0[i];
+            out[i][i] = scale.inner()[i];
+            out_inv[i][i] = 1.convert() / scale.inner()[i];
         }
 
         Self {

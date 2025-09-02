@@ -42,7 +42,7 @@ pub static SCENE: OnceLock<Scene> = OnceLock::new();
 
 use crate::{
     shapes::{Plane, Sphere},
-    vec3::Color,
+    vec3::{BaseVector, Color, New},
 };
 use std::{
     array,
@@ -60,7 +60,7 @@ use material::{Material, Scatter};
 use mmap::{ColorChannel, MmapFile, Pixel};
 use rng::Random as _;
 use shapes::Triangle;
-use vec3::{NormalizedVec3, Vec3, Vector};
+use vec3::{NormalizedVec3, Vec3};
 
 /// A ppm p6 image
 pub struct Image {
@@ -273,12 +273,12 @@ impl Scene {
                                 .take(sample_chunk_size)
                                 // average colors
                                 .reduce(|acc, element| {
-                                    Vector::new(array::from_fn(|index| {
+                                    Color::new(array::from_fn(|index| {
                                         // by first adding them up
                                         acc.inner()[index] + element.inner()[index]
                                     }))
                                 })
-                                .unwrap_or_default()
+                                .unwrap_or(BaseVector::new([0.; 3]))
                                 .into_inner()
                                 // and then dividing by samples
                                 .map(|e| e / sample_chunk_size as f32),
@@ -286,12 +286,13 @@ impl Scene {
 
                             if self.incremental.is_some() || self.continue_sampling.is_some() {
                                 // average with last iteration
-                                chunk[i] = ((chunk[i].to_float_color() * sample_iteration as f32
+                                chunk[i] = ((chunk[i].to_float_color::<f32>()
+                                    * sample_iteration as f32
                                     + color.color_correct())
                                     / (sample_iteration as f32 + 1.))
-                                    .to_natural_color();
+                                    .to_natural_color::<u8>();
                             } else {
-                                chunk[i] = color.color_correct().to_natural_color();
+                                chunk[i] = color.color_correct().to_natural_color::<u8>();
                             }
                         }
                     }
@@ -306,7 +307,7 @@ impl Scene {
         ray: Ray,
         materials: &[Material],
         bvh_stack: &mut Vec<(f32, u32)>, // is reused across shape types
-    ) -> Vector<3, f32> {
+    ) -> Color<3, f32> {
         let mut current_ray = ray;
         let mut current_color = None;
 
@@ -337,30 +338,30 @@ impl Scene {
                 None => {
                     let a = 0.5 * (current_ray.direction.y() + 1.0); // y scaled to 0.5-1
 
-                    let current_color = current_color.get_or_insert(Vector::new([1.; 3]));
+                    let current_color = current_color.get_or_insert(Color::new([1.; 3]));
                     *current_color = *current_color
-                        * (Vector::new([0.2, 0.2, 0.8]) * (1.0 - a) + Vector::new([1.; 3]) * a);
+                        * (Color::new([0.2, 0.2, 0.8]) * (1.0 - a) + Color::new([1.; 3]) * a);
 
                     break;
                 }
                 // scattter
                 Some((_, hit_point, (normal, texture_coordinates), shape_material_index)) => {
-                    let shape_material = shape_material_index.index(materials);
+                    let shape_material: &Material = shape_material_index.index(materials);
 
                     match shape_material.scatter(&current_ray, normal, hit_point) {
                         Scatter::Scattered(ray, color) => {
                             // calculate color of scattered ray and mix it with the current color
-                            let current_color = current_color.get_or_insert(Vector::new([1.; 3]));
+                            let current_color = current_color.get_or_insert(Color::new([1.; 3]));
                             *current_color = *current_color * color.sample(texture_coordinates);
 
                             current_ray = ray;
                         }
                         Scatter::Absorbed => {
-                            current_color = Some(Vector::new([0.; 3]));
+                            current_color = Some(Color::new([0.; 3]));
                             break;
                         }
                         Scatter::Light(color) => {
-                            let current_color = current_color.get_or_insert(Vector::new([1.; 3]));
+                            let current_color = current_color.get_or_insert(Color::new([1.; 3]));
                             *current_color = *current_color * color.sample(texture_coordinates);
                             break;
                         }
@@ -369,7 +370,7 @@ impl Scene {
             }
         }
 
-        current_color.unwrap_or(Vector::new([0.; 3]))
+        current_color.unwrap_or(Color::new([0.; 3]))
     }
 }
 

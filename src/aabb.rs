@@ -103,7 +103,7 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
         T: Sub<Output: Copy + PartialOrd>,
     {
         let d = self.diagonal();
-        d.inner()
+        d.into_inner()
             .into_iter()
             .max_by(|e1, e2| e1.partial_cmp(e2).unwrap_or(Ordering::Equal))
             .unwrap()
@@ -146,11 +146,14 @@ impl<T: Copy> Aabb<2, T> {
         T: Sub<Output: Copy + Mul>,
     {
         let d = self.diagonal();
-        d.x() * d.y()
+        d.x().clone() * d.y().clone()
     }
 }
 impl<T: Copy> Aabb<3, T> {
-    pub fn corner(&self, corner: usize) -> Vector<3, T> {
+    pub fn corner(&self, corner: usize) -> Vector<3, T>
+    where
+        T: Clone,
+    {
         let mut bit = 1;
         Vector::new([Vector::x, Vector::y, Vector::z].map(|f| {
             let v = f(if corner & bit == 0 {
@@ -159,7 +162,7 @@ impl<T: Copy> Aabb<3, T> {
                 &self.max
             });
             bit *= 2;
-            v
+            *v
         }))
     }
     pub fn surface_area(&self) -> T
@@ -167,14 +170,14 @@ impl<T: Copy> Aabb<3, T> {
         T: Add<Output = T> + From<u8> + Mul<Output = T> + Sub<Output = T>,
     {
         let d = self.diagonal();
-        T::from(2) * (d.x() * d.y() + d.x() * d.z() + d.y() * d.z())
+        T::from(2) * (*d.x() * *d.y() + *d.x() * *d.z() + *d.y() * *d.z())
     }
     pub fn volume(&self) -> <T as Sub>::Output
     where
         T: Sub<Output: Copy + Mul<Output = <T as Sub>::Output>>,
     {
         let d = self.diagonal();
-        d.x() * d.y() * d.z()
+        *d.x() * *d.y() * *d.z()
     }
 }
 

@@ -5,7 +5,7 @@ use crate::{
     indices::HasIndexer,
     mmap::Pixel,
     rng::Random as _,
-    vec3::{Color, Lerp as _, NormalizedVec3, Vec3, Vector},
+    vec3::{Color, Lerp as _, New, NormalizedVec3, Vec3},
 };
 
 #[derive(Debug, PartialEq)]
@@ -26,17 +26,17 @@ impl Material {
         normal: NormalizedVec3,
         hit_point: Vec3,
     ) -> Scatter<'a> {
-        let hit_point = hit_point + *normal * 1e-4;
+        let hit_point = hit_point + normal.to_vector() * 1e-4;
 
         match self.kind {
             MaterialKind::Lambertian => {
-                let direction = (*normal + NormalizedVec3::random()).normalize::<f32>();
+                let direction = (normal + NormalizedVec3::random()).normalize::<f32>();
 
                 Scatter::Scattered(
                     Ray::new(
                         hit_point,
                         // Avoid division by zero etc.
-                        if direction.near_zero() {
+                        if direction.to_vector().near_zero() {
                             normal
                         } else {
                             direction
@@ -53,11 +53,10 @@ impl Material {
                     Scatter::Scattered(Ray::new(hit_point, direction), &self.color_kind)
                 } else {
                     // add fuzziness
-                    let direction =
-                        (*direction + *NormalizedVec3::random() * fuzziness).normalize();
+                    let direction = (direction + NormalizedVec3::random() * fuzziness).normalize();
 
                     // Return None if the ray would end up in the object
-                    if direction.dot(*normal) > 0. {
+                    if direction.dot(normal) > 0. {
                         Scatter::Scattered(Ray::new(hit_point, direction), &self.color_kind)
                     } else {
                         Scatter::Absorbed
@@ -66,13 +65,13 @@ impl Material {
             }
             MaterialKind::Glass { refractive_index } => {
                 // If it enters or exits the shape
-                let (refractive_index, normal) = if ray.direction.dot(*normal) < 0. {
+                let (refractive_index, normal) = if ray.direction.dot(normal) < 0. {
                     (1. / refractive_index, normal)
                 } else {
                     (refractive_index, -normal)
                 };
 
-                let cos = ray.direction.neg().dot(*normal).min(1.);
+                let cos = ray.direction.neg().dot(normal).min(1.);
                 let sin = (1. - cos * cos).sqrt();
 
                 // schlick approximation
@@ -86,9 +85,9 @@ impl Material {
                     ray.direction.reflect(normal)
                 } else {
                     // refract
-                    let perpendicular = (*ray.direction + *normal * cos) * refractive_index;
+                    let perpendicular = (ray.direction + normal * cos) * refractive_index;
                     let discriminant = 1. - refractive_index * refractive_index * (1. - cos * cos);
-                    let parallel = *normal * -discriminant.sqrt();
+                    let parallel = normal * -discriminant.sqrt();
 
                     NormalizedVec3::new(perpendicular + parallel)
                 };
@@ -100,7 +99,8 @@ impl Material {
     }
 }
 impl HasIndexer for Material {
-    type IndexerType = u16;
+    // TODO: change back to u16 and figure out why Internet complains that it isnt usize
+    type IndexerType = usize;
 }
 
 pub enum Scatter<'a> {
@@ -138,7 +138,7 @@ impl From<&str> for MaterialKind {
 
 #[derive(Debug, PartialEq)]
 pub enum ColorKind {
-    Solid(Vector<3, f32>),
+    Solid(Color<3, f32>),
     Texture {
         width: u32,
         height: u32,
@@ -188,7 +188,7 @@ impl ColorKind {
     }
     /// x & y: 0..=1
     #[expect(clippy::cast_precision_loss)]
-    pub fn sample(&self, coords: [f32; 2]) -> Vector<3, f32> {
+    pub fn sample(&self, coords: [f32; 2]) -> Color<3, f32> {
         // tile
         let [x, y] = coords.map(|e: f32| e.fract().rem_euclid(1.));
         let y = 1. - y; // flip y-axis
@@ -225,9 +225,9 @@ impl ColorKind {
                     (e0, e1, de)
                 });
 
-                let [c00, c01, c10, c11]: [Vector<_, f32>; _] =
+                let [c00, c01, c10, c11]: [Color<_, f32>; _] =
                     [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]
-                        .map(|[x, y]| data[x + y * width as usize].to_float_color());
+                        .map(|[x, y]| data[x + y * width as usize].to_float_color::<f32>());
 
                 let c0 = c00.lerp(c10, dx);
                 let c1 = c01.lerp(c11, dx);

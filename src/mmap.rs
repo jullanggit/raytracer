@@ -6,7 +6,7 @@ use std::{
     ptr, slice,
 };
 
-use crate::vec3::{Color, Vector};
+use crate::vec3::Color;
 
 // sys/mman.h
 const MAP_FAILED: *mut c_void = usize::MAX as *mut c_void; // (void *) -1
@@ -84,8 +84,7 @@ impl MmapFile {
     /// Casts the memory from byte-offset `offset` onwards to &mut \[`T`\].
     /// # SAFETY:
     /// All Data in the mapping must be a valid instance of T.
-    #[expect(clippy::missing_safety_doc)] // clippy doesnt detect
-    pub unsafe fn as_casted_slice_mut<T: Copy>(&mut self, offset: usize) -> &mut [T] {
+    pub unsafe fn as_casted_slice_mut<T>(&mut self, offset: usize) -> &mut [T] {
         assert!(offset <= self.len);
 
         // SAFETY:

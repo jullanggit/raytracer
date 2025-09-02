@@ -1,10 +1,9 @@
 use self::BvhNodeKind::{Branch, Leaf};
 use crate::{
     Ray,
-    convert::Convert as _,
     indices::Indexer,
     shapes::{Intersects, MaterialIndexer, Shape},
-    vec3::{NormalizedVec3, Vec3, Vector},
+    vec3::{New, NormalizedVec3, Vec3, Vector},
 };
 use std::{array, f32, marker::PhantomData, ptr, range::Range};
 
@@ -24,11 +23,21 @@ pub struct BvhNode<T: Shape> {
 impl<T: Shape> Intersects for BvhNode<T> {
     #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
-        let t1 = (self.min - ray.origin) / *ray.direction;
-        let t2 = (self.max - ray.origin) / *ray.direction;
+        let t1 = (self.min - ray.origin) / ray.direction.clone().to_vector();
+        let t2 = (self.max - ray.origin) / ray.direction.clone().to_vector();
 
-        let tmin = t1.min(t2).0.into_iter().reduce(f32::max).unwrap();
-        let tmax = t1.max(t2).0.into_iter().reduce(f32::min).unwrap();
+        let tmin = t1
+            .min(t2)
+            .into_inner()
+            .into_iter()
+            .reduce(f32::max)
+            .unwrap();
+        let tmax = t1
+            .max(t2)
+            .into_inner()
+            .into_iter()
+            .reduce(f32::min)
+            .unwrap();
 
         (tmax >= tmin && tmax > 0.).then_some(tmin)
     }
@@ -38,7 +47,7 @@ impl<T: Shape> BvhNode<T> {
     #[inline(always)]
     pub fn new(shapes: &mut [T]) -> Vec<Self> {
         let shapes_range =
-            Range::from(Indexer::new(0)..Indexer::new(shapes.len().try_into().unwrap()));
+            Range::from(Indexer::new(0_u32)..Indexer::new(shapes.len().try_into().unwrap()));
         let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
 
         let extent = max - min;
@@ -91,7 +100,7 @@ impl<T: Shape> BvhNode<T> {
             let offsets = self.min + offset_per_bin * f32::from(offset_num);
 
             for axis in 0..3 {
-                let candidate_split = offsets.0[axis as usize];
+                let candidate_split = offsets.inner()[axis as usize];
 
                 let [[cost_lt, sa_lt], [cost_ge, sa_ge]] = array::from_fn(|child| {
                     let comparison = if child == 0 { f32::lt } else { f32::ge };
@@ -101,7 +110,7 @@ impl<T: Shape> BvhNode<T> {
                         .iter()
                         .filter(|&index| {
                             comparison(
-                                &index.index(shapes).centroid().0[axis as usize],
+                                &index.index(shapes).centroid().inner()[axis as usize],
                                 &candidate_split,
                             )
                         })
@@ -165,7 +174,7 @@ impl<T: Shape> BvhNode<T> {
             u32::try_from(
                 Indexer::<u32, T>::index_range_mut(shapes_range, shapes)
                     .iter_mut()
-                    .partition_in_place(|shape| shape.centroid().0[axis as usize] < split),
+                    .partition_in_place(|shape| shape.centroid().inner()[axis as usize] < split),
             )
             .unwrap()
                 + shapes_range.start.inner(),
@@ -197,7 +206,7 @@ impl<T: Shape> BvhNode<T> {
                 _type: PhantomData,
             };
 
-            let child_index = Indexer::new(nodes.len().convert());
+            let child_index = Indexer::new(nodes.len().try_into().unwrap());
 
             nodes.push(child);
 
@@ -291,7 +300,7 @@ impl<T: Shape> BvhNode<T> {
         closest_hit.0.is_finite().then(|| {
             let (time, index) = closest_hit;
 
-            let hit_point = ray.origin + *ray.direction * time;
+            let hit_point = ray.origin + ray.direction.clone().to_vector() * time;
 
             (
                 time,
