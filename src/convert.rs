@@ -55,6 +55,8 @@ impl<T, O> TryConvertSpec<O> for T {
         unsafe extern "C" {
             fn __convert_not_implemented() -> !;
         }
+        // SAFETY:
+        // yeah not really safe, fingers crossed this symbol is undefined and raises a link-time-error
         unsafe { __convert_not_implemented() }
     }
 }

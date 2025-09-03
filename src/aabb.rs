@@ -1,4 +1,4 @@
-use crate::vec3::{Lerp, MinMax, New, Sqrt, Vector};
+use crate::vec3::{Lerp, MinMax, New as _, Sqrt, Vector};
 use std::{
     array,
     cmp::Ordering,
@@ -16,8 +16,8 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
         T: MinMax,
     {
         Self {
-            min: min.min(max),
-            max: min.max(max),
+            min: min.min(&max),
+            max: min.max(&max),
         }
     }
     /// Region of intersection between self and other
@@ -26,8 +26,8 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
         T: MinMax,
     {
         Self {
-            min: self.min.max(other.min),
-            max: self.max.min(other.max),
+            min: self.min.max(&other.min),
+            max: self.max.min(&other.max),
         }
     }
     /// Whether self and other overlap
@@ -146,7 +146,7 @@ impl<T: Copy> Aabb<2, T> {
         T: Sub<Output: Copy + Mul>,
     {
         let d = self.diagonal();
-        d.x().clone() * d.y().clone()
+        *d.x() * *d.y()
     }
 }
 impl<T: Copy> Aabb<3, T> {
@@ -189,13 +189,13 @@ impl<const DIMENSIONS: usize, T: Copy + MinMax> Union<Vector<DIMENSIONS, T>>
     for Aabb<DIMENSIONS, T>
 {
     fn union(&mut self, value: Vector<DIMENSIONS, T>) {
-        self.min = self.min.min(value);
-        self.max = self.max.max(value);
+        self.min = self.min.min(&value);
+        self.max = self.max.max(&value);
     }
 }
 impl<const DIMENSIONS: usize, T: Copy + MinMax> Union<Self> for Aabb<DIMENSIONS, T> {
     fn union(&mut self, value: Self) {
-        self.min = self.min.min(value.min);
-        self.max = self.max.max(value.max);
+        self.min = self.min.min(&value.min);
+        self.max = self.max.max(&value.max);
     }
 }

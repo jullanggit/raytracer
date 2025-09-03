@@ -3,7 +3,7 @@ use crate::{
     Ray,
     indices::Indexer,
     shapes::{Intersects, MaterialIndexer, Shape},
-    vec3::{New, NormalizedVec3, Vec3, Vector},
+    vec3::{New as _, NormalizedVec3, Vec3, Vector},
 };
 use std::{array, f32, marker::PhantomData, ptr, range::Range};
 
@@ -23,17 +23,17 @@ pub struct BvhNode<T: Shape> {
 impl<T: Shape> Intersects for BvhNode<T> {
     #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
-        let t1 = (self.min - ray.origin) / ray.direction.clone().to_vector();
-        let t2 = (self.max - ray.origin) / ray.direction.clone().to_vector();
+        let t1 = (self.min - ray.origin) / ray.direction.to_vector();
+        let t2 = (self.max - ray.origin) / ray.direction.to_vector();
 
         let tmin = t1
-            .min(t2)
+            .min(&t2)
             .into_inner()
             .into_iter()
             .reduce(f32::max)
             .unwrap();
         let tmax = t1
-            .max(t2)
+            .max(&t2)
             .into_inner()
             .into_iter()
             .reduce(f32::min)
@@ -79,7 +79,7 @@ impl<T: Shape> BvhNode<T> {
             |(prev_min, prev_max), index| {
                 let (min, max) = (index.index(shapes).min(), index.index(shapes).max());
 
-                (prev_min.min(min), prev_max.max(max))
+                (prev_min.min(&min), prev_max.max(&max))
             },
         )
     }
@@ -300,7 +300,7 @@ impl<T: Shape> BvhNode<T> {
         closest_hit.0.is_finite().then(|| {
             let (time, index) = closest_hit;
 
-            let hit_point = ray.origin + ray.direction.clone().to_vector() * time;
+            let hit_point = ray.origin + ray.direction.to_vector() * time;
 
             (
                 time,

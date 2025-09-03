@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     convert::Convert,
-    vec3::{New, Vector},
+    vec3::{New as _, Vector},
 };
 
 #[derive(Debug, PartialEq)]

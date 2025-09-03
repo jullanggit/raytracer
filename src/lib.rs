@@ -8,7 +8,6 @@
 #![feature(new_range_api)]
 #![feature(substr_range)]
 #![feature(iter_array_chunks)]
-#![feature(generic_arg_infer)]
 #![feature(generic_const_exprs)]
 #![feature(f16)]
 #![feature(f128)]
@@ -42,7 +41,7 @@ pub static SCENE: OnceLock<Scene> = OnceLock::new();
 
 use crate::{
     shapes::{Plane, Sphere},
-    vec3::{BaseVector, Color, New},
+    vec3::{BaseVector, Color, New as _},
 };
 use std::{
     array,
@@ -278,7 +277,7 @@ impl Scene {
                                         acc.inner()[index] + element.inner()[index]
                                     }))
                                 })
-                                .unwrap_or(BaseVector::new([0.; 3]))
+                                .unwrap_or_else(|| BaseVector::new([0.; 3]))
                                 .into_inner()
                                 // and then dividing by samples
                                 .map(|e| e / sample_chunk_size as f32),
@@ -338,7 +337,7 @@ impl Scene {
                 None => {
                     let a = 0.5 * (current_ray.direction.y() + 1.0); // y scaled to 0.5-1
 
-                    let current_color = current_color.get_or_insert(Color::new([1.; 3]));
+                    let current_color = current_color.get_or_insert_with(|| Color::new([1.; 3]));
                     *current_color = *current_color
                         * (Color::new([0.2, 0.2, 0.8]) * (1.0 - a) + Color::new([1.; 3]) * a);
 
@@ -351,7 +350,8 @@ impl Scene {
                     match shape_material.scatter(&current_ray, normal, hit_point) {
                         Scatter::Scattered(ray, color) => {
                             // calculate color of scattered ray and mix it with the current color
-                            let current_color = current_color.get_or_insert(Color::new([1.; 3]));
+                            let current_color =
+                                current_color.get_or_insert_with(|| Color::new([1.; 3]));
                             *current_color = *current_color * color.sample(texture_coordinates);
 
                             current_ray = ray;
@@ -361,7 +361,8 @@ impl Scene {
                             break;
                         }
                         Scatter::Light(color) => {
-                            let current_color = current_color.get_or_insert(Color::new([1.; 3]));
+                            let current_color =
+                                current_color.get_or_insert_with(|| Color::new([1.; 3]));
                             *current_color = *current_color * color.sample(texture_coordinates);
                             break;
                         }
@@ -370,7 +371,7 @@ impl Scene {
             }
         }
 
-        current_color.unwrap_or(Color::new([0.; 3]))
+        current_color.unwrap_or_else(|| Color::new([0.; 3]))
     }
 }
 

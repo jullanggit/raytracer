@@ -332,14 +332,14 @@ impl Shape for Triangle {
         let b = self.a + self.e1;
         let c = self.a + self.e2;
 
-        self.a.min(b).min(c)
+        self.a.min(&b).min(&c)
     }
 
     fn max(&self) -> Vec3 {
         let b = self.a + self.e1;
         let c = self.a + self.e2;
 
-        self.a.max(b).max(c)
+        self.a.max(&b).max(&c)
     }
 }
 

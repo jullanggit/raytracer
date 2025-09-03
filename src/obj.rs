@@ -5,7 +5,7 @@ use crate::{
     indices::Indexer,
     material::{ColorKind, Material, MaterialKind},
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
-    vec3::{Color, New, NormalizedVec3, Vec3},
+    vec3::{Color, New as _, NormalizedVec3, Vec3},
 };
 
 #[inline(always)]

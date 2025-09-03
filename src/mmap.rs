@@ -82,7 +82,7 @@ impl MmapFile {
         unsafe { slice::from_raw_parts_mut(self.ptr, self.len) }
     }
     /// Casts the memory from byte-offset `offset` onwards to &mut \[`T`\].
-    /// # SAFETY:
+    /// # Safety
     /// All Data in the mapping must be a valid instance of T.
     pub unsafe fn as_casted_slice_mut<T>(&mut self, offset: usize) -> &mut [T] {
         assert!(offset <= self.len);

@@ -277,19 +277,19 @@ impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
     }
     /// Element-wise min
     #[inline(always)]
-    pub fn min(self, other: Self) -> Self
+    pub fn min(self, other: &Self) -> Self
     where
         T: MinMax + Clone,
     {
-        self.combine(&other, MinMax::min)
+        self.combine(other, MinMax::min)
     }
     /// Element-wise max
     #[inline(always)]
-    pub fn max(self, other: Self) -> Self
+    pub fn max(self, other: &Self) -> Self
     where
         T: MinMax + Clone,
     {
-        self.combine(&other, MinMax::max)
+        self.combine(other, MinMax::max)
     }
 }
 impl<T> Vector<3, T> {
@@ -360,13 +360,10 @@ impl<const DIMENSIONS: usize, Source> Vector<DIMENSIONS, Source> {
     where
         Source: Convert<Target>,
     {
-        Vector::new(self.0.map(|e| e.convert()))
+        Vector::new(self.0.map(Convert::convert))
     }
 }
-impl<const DIMENSIONS: usize, T: Float> Vector<DIMENSIONS, T>
-where
-    T: Sqrt<T>,
-{
+impl<const DIMENSIONS: usize, T: Float> Vector<DIMENSIONS, T> {
     #[inline(always)]
     pub fn is_normalized(&self) -> bool
     where
@@ -465,7 +462,7 @@ macro_rules! access_vec {
                 [(); DIMENSIONS - 1 - $index]:
             {
                 #[inline(always)]
-                pub fn $name(&self) -> &T {
+                pub const fn $name(&self) -> &T {
                     &self.0[$index]
                 }
             }
@@ -483,7 +480,7 @@ impl<const DIMENSIONS: usize, T> Color<DIMENSIONS, T> {
     where
         T: Sqrt,
     {
-        BaseVector(self.0.map(Sqrt::sqrt), PhantomData)
+        Self(self.0.map(Sqrt::sqrt), PhantomData)
     }
 }
 /// Converts natural -> float Colors (0..MAX -> 0.0..1.0).
@@ -537,8 +534,8 @@ where
     }
 }
 impl<const DIMENSIONS: usize, T> NormalizedVector<DIMENSIONS, T> {
-    pub fn new_unchecked(vector: [T; DIMENSIONS]) -> Self {
-        BaseVector(vector, PhantomData)
+    pub const fn new_unchecked(vector: [T; DIMENSIONS]) -> Self {
+        Self(vector, PhantomData)
     }
     #[inline(always)]
     pub fn reflect(self, normal: Self) -> Self
@@ -559,14 +556,14 @@ where
     f16: Convert<T>,
 {
     #[inline(always)]
-    fn new(vector: [T; DIMENSIONS]) -> Self {
+    fn new(input: [T; DIMENSIONS]) -> Self {
         debug_assert!(
-            Vector::new(vector).is_normalized(),
-            "vector: {vector:?}, len: {:?}",
-            Vector::new(vector).length::<T>()
+            Vector::new(input).is_normalized(),
+            "vector: {input:?}, len: {:?}",
+            Vector::new(input).length::<T>()
         );
 
-        Self(vector, PhantomData)
+        Self(input, PhantomData)
     }
 }
 impl<const DIMENSIONS: usize, T: Float> New<Vector<DIMENSIONS, T>>
@@ -575,34 +572,33 @@ where
     f16: Convert<T>,
 {
     #[inline(always)]
-    fn new(vector: Vector<DIMENSIONS, T>) -> Self {
+    fn new(input: Vector<DIMENSIONS, T>) -> Self {
         debug_assert!(
-            vector.is_normalized(),
-            "vector: {vector:?}, len: {:?}",
-            vector.length::<T>()
+            input.is_normalized(),
+            "vector: {input:?}, len: {:?}",
+            input.length::<T>()
         );
 
-        Self(vector.into_inner(), PhantomData)
+        Self(input.into_inner(), PhantomData)
     }
 }
 impl<T: Float> NormalizedVector<3, T>
 where
-    T: Clone,
     i8: Convert<T>,
 {
     #[inline(always)]
     pub fn coordinate_system(self) -> [Self; 2] {
-        let sign = T::copysign(1.convert(), self.z().clone());
-        let a = (-1).convert() / (sign + self.z().clone());
-        let b = self.x().clone() * self.y().clone() * a;
+        let sign = T::copysign(1.convert(), *self.z());
+        let a = (-1).convert() / (sign + *self.z());
+        let b = *self.x() * *self.y() * a;
 
         [
             Self::new_unchecked([
                 1.convert() + sign * self.x().sqrt() * a,
                 sign * b,
-                -sign * self.x().clone(),
+                -sign * *self.x(),
             ]),
-            Self::new_unchecked([b, sign + self.y().sqrt() * a, -self.y().clone()]),
+            Self::new_unchecked([b, sign + self.y().sqrt() * a, -*self.y()]),
         ]
     }
     #[inline(always)]
