@@ -1,0 +1,7 @@
+incremental(10)
+screen(-1 -9 110, 2 0 0, 0 -2 0, 2000, 2000, 1000, 10)
+camera(0 -10 111)
+spheres()
+planes()
+obj((Heart))
+triangles()

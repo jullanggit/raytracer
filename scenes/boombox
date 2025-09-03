@@ -1,0 +1,7 @@
+incremental(10)
+screen(-1 1 -0.5, 2 0 0, 0 -2 0, 2000, 2000, 1000, 10)
+camera(0 0 -40)
+spheres()
+planes()
+obj((boombox_4k))
+triangles()

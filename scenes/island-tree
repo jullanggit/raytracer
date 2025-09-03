@@ -1,0 +1,7 @@
+incremental(10)
+screen(-1 2.5 10, 2 0 0, 0 -2 0, 2000, 2000, 1000, 50)
+camera(0 1.5 20)
+spheres()
+planes()
+obj((island_tree_02_1k))
+triangles()
