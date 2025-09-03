@@ -5,7 +5,7 @@ use crate::{
     indices::HasIndexer,
     mmap::Pixel,
     rng::Random as _,
-    vec3::{Color, Lerp as _, New as _, NormalizedVec3, Vec3},
+    vec3::{Color, Lerp as _, New as _, NormalizedVector3, Point3},
 };
 
 #[derive(Debug, PartialEq)]
@@ -23,14 +23,14 @@ impl Material {
     pub fn scatter<'a>(
         &'a self,
         ray: &Ray,
-        normal: NormalizedVec3,
-        hit_point: Vec3,
+        normal: NormalizedVector3,
+        hit_point: Point3,
     ) -> Scatter<'a> {
         let hit_point = hit_point + normal.to_vector() * 1e-4;
 
         match self.kind {
             MaterialKind::Lambertian => {
-                let direction = (normal + NormalizedVec3::random()).normalize::<f32>();
+                let direction = (normal + NormalizedVector3::random()).normalize::<f32>();
 
                 Scatter::Scattered(
                     Ray::new(
@@ -53,7 +53,8 @@ impl Material {
                     Scatter::Scattered(Ray::new(hit_point, direction), &self.color_kind)
                 } else {
                     // add fuzziness
-                    let direction = (direction + NormalizedVec3::random() * fuzziness).normalize();
+                    let direction =
+                        (direction + NormalizedVector3::random() * fuzziness).normalize();
 
                     // Return None if the ray would end up in the object
                     if direction.dot(normal) > 0. {
@@ -89,7 +90,7 @@ impl Material {
                     let discriminant = 1. - refractive_index * refractive_index * (1. - cos * cos);
                     let parallel = normal * -discriminant.sqrt();
 
-                    NormalizedVec3::new(perpendicular + parallel)
+                    NormalizedVector3::new(perpendicular + parallel)
                 };
 
                 Scatter::Scattered(Ray::new(hit_point, direction), &self.color_kind)

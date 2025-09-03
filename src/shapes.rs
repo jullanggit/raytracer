@@ -11,7 +11,7 @@ use crate::{
     Ray, SCENE,
     indices::{HasIndexer, Indexer},
     material::Material,
-    vec3::{New as _, NormalizedVec3, Vec3, Vector},
+    vec3::{New as _, NormalizedVector3, Point, Point3, Vector3},
 };
 
 /// The min distance an intersection has to have for it to count
@@ -27,26 +27,26 @@ pub trait Intersects {
 
 pub trait Shape: Intersects + Debug {
     /// Calculates the normal of a point on the shape's surface
-    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]);
+    fn normal_and_texture_coordinates(&self, point: &Point3) -> (NormalizedVector3, [f32; 2]);
 
     fn material_index(&self) -> MaterialIndexer;
 
     // BVH
-    fn centroid(&self) -> Vec3;
+    fn centroid(&self) -> Point3;
     /// The minimum point of the AABB enclosing the shape
-    fn min(&self) -> Vec3;
+    fn min(&self) -> Point3;
     /// The maximum point of the AABB enclosing the shape
-    fn max(&self) -> Vec3;
+    fn max(&self) -> Point3;
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Sphere {
-    center: Vec3,
+    center: Point3,
     radius: f32,
     material_index: MaterialIndexer,
 }
 impl Sphere {
-    pub const fn new(center: Vec3, radius: f32, material_index: MaterialIndexer) -> Self {
+    pub const fn new(center: Point3, radius: f32, material_index: MaterialIndexer) -> Self {
         Self {
             center,
             radius,
@@ -58,7 +58,7 @@ impl Intersects for Sphere {
     // See `ray_sphere_intersection_derivation.latex` for the formula used here
     #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
-        let delta_origin = ray.origin - self.center;
+        let delta_origin = self.center.vector_to(ray.origin);
 
         let delta_origin_direction = delta_origin.dot(ray.direction);
         let discriminant = delta_origin_direction * delta_origin_direction
@@ -88,9 +88,9 @@ impl Intersects for Sphere {
 }
 impl Shape for Sphere {
     // uses spherical mapping for texture coordinates
-    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
+    fn normal_and_texture_coordinates(&self, point: &Point3) -> (NormalizedVector3, [f32; 2]) {
         (
-            (*point - self.center).normalize::<f32>(),
+            (self.center.vector_to(*point)).normalize::<f32>(),
             [
                 0.5 + point.z().atan2(*point.x()) / TAU,
                 0.5 - point.y().asin() / PI,
@@ -102,28 +102,32 @@ impl Shape for Sphere {
         self.material_index
     }
 
-    fn centroid(&self) -> Vec3 {
+    fn centroid(&self) -> Point3 {
         self.center
     }
 
-    fn min(&self) -> Vec3 {
-        self.center - Vec3::new([self.radius; 3])
+    fn min(&self) -> Point3 {
+        self.center - Vector3::new([self.radius; 3])
     }
 
-    fn max(&self) -> Vec3 {
-        self.center + Vec3::new([self.radius; 3])
+    fn max(&self) -> Point3 {
+        self.center + Vector3::new([self.radius; 3])
     }
 }
 
 #[derive(Debug)]
 pub struct Plane {
-    point: Vec3,
-    normal: NormalizedVec3,
+    point: Point3,
+    normal: NormalizedVector3,
     material_index: MaterialIndexer,
 }
 
 impl Plane {
-    pub const fn new(point: Vec3, normal: NormalizedVec3, material_index: MaterialIndexer) -> Self {
+    pub const fn new(
+        point: Point3,
+        normal: NormalizedVector3,
+        material_index: MaterialIndexer,
+    ) -> Self {
         Self {
             point,
             normal,
@@ -141,7 +145,7 @@ impl Intersects for Plane {
             return None; // Ray is parallel to the plane
         }
 
-        let numerator = self.normal.dot(ray.origin - self.point);
+        let numerator = self.normal.dot(self.point.vector_to(ray.origin));
 
         let t = -(numerator / denominator);
 
@@ -150,8 +154,8 @@ impl Intersects for Plane {
     }
 }
 impl Shape for Plane {
-    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
-        let delta = *point - self.point;
+    fn normal_and_texture_coordinates(&self, point: &Point3) -> (NormalizedVector3, [f32; 2]) {
+        let delta = self.point.vector_to(*point);
         (
             // The normal of a plane is the same at all points on it
             self.normal,
@@ -164,51 +168,51 @@ impl Shape for Plane {
         self.material_index
     }
 
-    fn centroid(&self) -> Vec3 {
+    fn centroid(&self) -> Point3 {
         self.point
     }
 
-    fn min(&self) -> Vec3 {
-        Vector::new([f32::NEG_INFINITY; 3])
+    fn min(&self) -> Point3 {
+        Point::new([f32::NEG_INFINITY; 3])
     }
 
-    fn max(&self) -> Vec3 {
-        Vector::new([f32::INFINITY; 3])
+    fn max(&self) -> Point3 {
+        Point::new([f32::INFINITY; 3])
     }
 }
 
 #[derive(Debug)]
 pub struct Triangle {
-    a: Vec3,
+    a: Point3,
     /// The edge from a to b
-    e1: Vec3,
+    e1: Vector3,
     /// The edge from a to c
-    e2: Vec3,
+    e2: Vector3,
     normals_texture_coordinates: NormalsTextureCoordinates,
     material_index: MaterialIndexer,
 }
 impl Triangle {
     pub fn new(
-        a: Vec3,
-        b: Vec3,
-        c: Vec3,
+        a: Point3,
+        b: Point3,
+        c: Point3,
         normals_texture_coordinates: NormalsTextureCoordinates,
         material_index: MaterialIndexer,
     ) -> Self {
         Self {
             a,
-            e1: b - a,
-            e2: c - a,
+            e1: a.vector_to(b),
+            e2: a.vector_to(c),
             normals_texture_coordinates,
             material_index,
         }
     }
     fn barycentric_coordinates(
         &self,
-        point: &Vec3,
+        point: &Point3,
         [d00, d01, d11, denominator]: [f32; 4],
     ) -> [f32; 3] {
-        let ap = *point - self.a; // a -> p
+        let ap = self.a.vector_to(*point);
 
         // Dot products
         let d20 = ap.dot(self.e1);
@@ -237,7 +241,7 @@ impl Intersects for Triangle {
         }
 
         let inv_det = 1.0 / det;
-        let s = ray.origin - self.a;
+        let s = self.a.vector_to(ray.origin);
         let u = inv_det * s.dot(ray_cross_e2);
         if !(0.0..=1.).contains(&u) {
             return None;
@@ -257,7 +261,7 @@ impl Intersects for Triangle {
 impl Shape for Triangle {
     #[inline(always)]
     #[expect(clippy::wildcard_enum_match_arm)]
-    fn normal_and_texture_coordinates(&self, point: &Vec3) -> (NormalizedVec3, [f32; 2]) {
+    fn normal_and_texture_coordinates(&self, point: &Point3) -> (NormalizedVector3, [f32; 2]) {
         use NormalsTextureCoordinates::{Both, None, Normals, TextureCoordinates};
 
         let default_normal = || self.e1.cross(self.e2).normalize::<f32>();
@@ -324,18 +328,18 @@ impl Shape for Triangle {
         self.material_index
     }
 
-    fn centroid(&self) -> Vec3 {
+    fn centroid(&self) -> Point3 {
         self.a + (self.e1 + self.e2) / 3.
     }
 
-    fn min(&self) -> Vec3 {
+    fn min(&self) -> Point3 {
         let b = self.a + self.e1;
         let c = self.a + self.e2;
 
         self.a.min(&b).min(&c)
     }
 
-    fn max(&self) -> Vec3 {
+    fn max(&self) -> Point3 {
         let b = self.a + self.e1;
         let c = self.a + self.e2;
 
@@ -343,7 +347,7 @@ impl Shape for Triangle {
     }
 }
 
-type NormalsIndexer = Indexer<u32, [NormalizedVec3; 3]>;
+type NormalsIndexer = Indexer<u32, [NormalizedVector3; 3]>;
 type TextureCoordinatesIndexer = Indexer<u32, [[f32; 2]; 3]>;
 type BarycentricPrecomputedIndexer = Indexer<u32, [f32; 4]>;
 

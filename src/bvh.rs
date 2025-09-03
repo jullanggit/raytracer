@@ -3,7 +3,7 @@ use crate::{
     Ray,
     indices::Indexer,
     shapes::{Intersects, MaterialIndexer, Shape},
-    vec3::{New as _, NormalizedVec3, Vec3, Vector},
+    vec3::{New as _, NormalizedVector3, Point, Point3},
 };
 use std::{array, f32, marker::PhantomData, ptr, range::Range};
 
@@ -15,16 +15,16 @@ type ShapesIndexer<Shape> = Indexer<u32, Shape>;
 pub struct BvhNode<T: Shape> {
     kind: BvhNodeKind<T>,
     // aabb
-    min: Vec3,
-    max: Vec3,
+    min: Point3,
+    max: Point3,
     _type: PhantomData<T>,
 }
 
 impl<T: Shape> Intersects for BvhNode<T> {
     #[inline(always)]
     fn intersects(&self, ray: &Ray) -> Option<f32> {
-        let t1 = (self.min - ray.origin) / ray.direction.to_vector();
-        let t2 = (self.max - ray.origin) / ray.direction.to_vector();
+        let t1 = (ray.origin.vector_to(self.min)) / ray.direction.to_vector();
+        let t2 = (ray.origin.vector_to(self.max)) / ray.direction.to_vector();
 
         let tmin = t1
             .min(&t2)
@@ -50,7 +50,7 @@ impl<T: Shape> BvhNode<T> {
             Range::from(Indexer::new(0_u32)..Indexer::new(shapes.len().try_into().unwrap()));
         let (min, max) = Self::smallest_bounds(shapes, shapes_range.iter());
 
-        let extent = max - min;
+        let extent = min.vector_to(max);
         let surface_area =
             2. * (extent.x() * extent.y() + extent.x() * extent.z() + extent.y() * extent.z());
 
@@ -70,11 +70,11 @@ impl<T: Shape> BvhNode<T> {
     fn smallest_bounds(
         shapes: &[T],
         indices: impl Iterator<Item = ShapesIndexer<T>>,
-    ) -> (Vec3, Vec3) {
+    ) -> (Point3, Point3) {
         indices.fold(
             (
-                Vector::new([f32::INFINITY; 3]),
-                Vector::new([f32::NEG_INFINITY; 3]),
+                Point::new([f32::INFINITY; 3]),
+                Point::new([f32::NEG_INFINITY; 3]),
             ),
             |(prev_min, prev_max), index| {
                 let (min, max) = (index.index(shapes).min(), index.index(shapes).max());
@@ -91,7 +91,7 @@ impl<T: Shape> BvhNode<T> {
 
         let mut best_split = (0, 0., f32::INFINITY, [f32::NAN, f32::NAN]); // (axis, value, cost, surface areas)
 
-        let extent = self.max - self.min;
+        let extent = self.min.vector_to(self.max);
         let bins_per_axis: u8 = 16;
         let offset_per_bin = extent / f32::from(bins_per_axis);
 
@@ -124,7 +124,7 @@ impl<T: Shape> BvhNode<T> {
                         return [f32::INFINITY, f32::NAN];
                     }
 
-                    let extent = max - min;
+                    let extent = min.vector_to(max);
 
                     let surface_area = 2.
                         * (extent.x() * extent.y()
@@ -229,7 +229,7 @@ impl<T: Shape> BvhNode<T> {
         shapes: &[T],
         nodes: &[Self],
         stack: &mut Vec<(f32, BvhNodeIndexerType)>,
-    ) -> Option<(f32, Vec3, (NormalizedVec3, [f32; 2]), MaterialIndexer)> {
+    ) -> Option<(f32, Point3, (NormalizedVector3, [f32; 2]), MaterialIndexer)> {
         stack.clear();
         // SAFETY:
         // - Indexer is a repr(transparent) wrapper around IndexerType

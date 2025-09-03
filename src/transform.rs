@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     convert::Convert,
-    vec3::{New as _, Vector},
+    vec3::{New as _, Point},
 };
 
 #[derive(Debug, PartialEq)]
@@ -173,21 +173,21 @@ impl<const N: usize, T> DerefMut for SquareMatrix<N, T> {
         &mut self.0
     }
 }
-impl<const N: usize, T> Mul<Vector<N, T>> for SquareMatrix<N, T>
+impl<const N: usize, T> Mul<Point<N, T>> for SquareMatrix<N, T>
 where
     T: AddAssign + Clone + Mul<Output = T>,
     u8: Convert<T>,
 {
-    type Output = Vector<N, T>;
+    type Output = Point<N, T>;
 
-    fn mul(self, rhs: Vector<N, T>) -> Self::Output {
+    fn mul(self, rhs: Point<N, T>) -> Self::Output {
         let mut out: [T; _] = array::from_fn(|_| 0.convert());
         for i in 0..N {
             for j in 0..N {
                 out[i] += self[i][j].clone() * rhs.inner()[j].clone();
             }
         }
-        Vector::new(out)
+        Point::new(out)
     }
 }
 impl<const N: usize, T> Clone for SquareMatrix<N, T>
@@ -237,7 +237,7 @@ impl<const N: usize, T> Transform<N, T> {
     }
 }
 impl<const N: usize, T> Transform<N, T> {
-    pub fn translate(delta: Vector<{ N - 1 }, T>) -> Self
+    pub fn translate(delta: Point<{ N - 1 }, T>) -> Self
     where
         T: From<bool> + Copy + Neg<Output = T>,
     {
@@ -253,7 +253,7 @@ impl<const N: usize, T> Transform<N, T> {
             inv_m: out_inv,
         }
     }
-    pub fn scale(scale: Vector<{ N - 1 }, T>) -> Self
+    pub fn scale(scale: Point<{ N - 1 }, T>) -> Self
     where
         T: From<bool> + Copy + Div<Output = T>,
         u8: Convert<T>,

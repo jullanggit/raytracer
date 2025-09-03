@@ -41,7 +41,7 @@ pub static SCENE: OnceLock<Scene> = OnceLock::new();
 
 use crate::{
     shapes::{Plane, Sphere},
-    vec3::{BaseVector, Color, New as _},
+    vec3::{BaseVector, Color, New as _, Point3},
 };
 use std::{
     array,
@@ -59,7 +59,7 @@ use material::{Material, Scatter};
 use mmap::{ColorChannel, MmapFile, Pixel};
 use rng::Random as _;
 use shapes::Triangle;
-use vec3::{NormalizedVec3, Vec3};
+use vec3::{NormalizedVector3, Vector3};
 
 /// A ppm p6 image
 pub struct Image {
@@ -90,11 +90,11 @@ impl Image {
 
 #[derive(Debug)]
 pub struct Ray {
-    origin: Vec3,
-    direction: NormalizedVec3,
+    origin: Point3,
+    direction: NormalizedVector3,
 }
 impl Ray {
-    const fn new(origin: Vec3, direction: NormalizedVec3) -> Self {
+    const fn new(origin: Point3, direction: NormalizedVector3) -> Self {
         Self { origin, direction }
     }
 }
@@ -115,7 +115,7 @@ pub struct Shapes {
     spheres: Box<[Sphere]>,
     planes: Box<[Plane]>,
     triangles: Box<[Triangle]>,
-    vertex_normals: Box<[[NormalizedVec3; 3]]>,
+    vertex_normals: Box<[[NormalizedVector3; 3]]>,
     texture_coordinates: Box<[[[f32; 2]; 3]]>,
     /// [d00, d01, d11, denominator]
     barycentric_precomputed: Box<[[f32; 4]]>,
@@ -125,7 +125,7 @@ impl Shapes {
         spheres: Box<[Sphere]>,
         planes: Box<[Plane]>,
         triangles: Box<[Triangle]>,
-        vertex_normals: Box<[[NormalizedVec3; 3]]>,
+        vertex_normals: Box<[[NormalizedVector3; 3]]>,
         texture_coordinates: Box<[[[f32; 2]; 3]]>,
         barycentric_precomputed: Box<[[f32; 4]]>,
     ) -> Self {
@@ -264,7 +264,7 @@ impl Scene {
 
                                     let ray = Ray::new(
                                         self.camera.position,
-                                        (pixel_position - self.camera.position).normalize(),
+                                        self.camera.position.vector_to(pixel_position).normalize(),
                                     );
 
                                     self.ray_color(ray, &self.materials, &mut bvh_stack)
@@ -377,9 +377,9 @@ impl Scene {
 
 #[derive(Debug)]
 pub struct Screen {
-    top_left: Vec3,
-    top_edge: Vec3,
-    left_edge: Vec3,
+    top_left: Point3,
+    top_edge: Vector3,
+    left_edge: Vector3,
     resolution_width: usize,
     resolution_height: usize,
     samples_per_pixel: usize,
@@ -387,9 +387,9 @@ pub struct Screen {
 }
 impl Screen {
     const fn new(
-        top_left: Vec3,
-        top_edge: Vec3,
-        left_edge: Vec3,
+        top_left: Point3,
+        top_edge: Vector3,
+        left_edge: Vector3,
         resolution_width: usize,
         resolution_height: usize,
         samples_per_pixel: usize,
@@ -409,10 +409,10 @@ impl Screen {
 
 #[derive(Debug)]
 pub struct Camera {
-    position: Vec3,
+    position: Point3,
 }
 impl Camera {
-    const fn new(position: Vec3) -> Self {
+    const fn new(position: Point3) -> Self {
         Self { position }
     }
 }

@@ -182,6 +182,7 @@ macro_rules! VectorLabels {
             #[derive(Clone, Copy, Debug, PartialEq)]
             pub struct ${ concat($label, Usage) };
             pub type $label<const DIMENSIONS: usize, T> = BaseVector<DIMENSIONS, T, ${concat($label, Usage)}>;
+            pub type ${concat($label, "3")} = $label<3, f32>;
         )+
     };
 }
@@ -190,6 +191,10 @@ VectorLabels!(Vector, Point, Normal, NormalizedVector, Color);
 pub trait VectorOrColor {}
 impl VectorOrColor for VectorUsage {}
 impl VectorOrColor for ColorUsage {}
+
+pub trait NonNormalVector {}
+impl NonNormalVector for PointUsage {}
+impl<T: VectorOrColor> NonNormalVector for T {}
 
 pub trait New<Input> {
     fn new(input: Input) -> Self;
@@ -241,7 +246,7 @@ impl<const DIMENSIONS: usize, T, Usage> New<[T; DIMENSIONS]> for BaseVector<DIME
         Self(input, PhantomData)
     }
 }
-impl<const DIMENSIONS: usize, T, Usage: VectorOrColor> BaseVector<DIMENSIONS, T, Usage> {
+impl<const DIMENSIONS: usize, T, Usage: NonNormalVector> BaseVector<DIMENSIONS, T, Usage> {
     // dont expost mutable references for Normals, NormalizedVectors etc.
     pub const fn inner_mut(&mut self) -> &mut [T; DIMENSIONS] {
         &mut self.0
@@ -257,6 +262,22 @@ impl<const DIMENSIONS: usize, T, Usage: VectorOrColor> BaseVector<DIMENSIONS, T,
         BaseVector::new(array::from_fn(|index| {
             f(self.0[index].clone(), other.0[index].clone())
         }))
+    }
+    /// Element-wise min
+    #[inline(always)]
+    pub fn min(self, other: &Self) -> Self
+    where
+        T: MinMax + Clone,
+    {
+        self.combine(other, MinMax::min)
+    }
+    /// Element-wise max
+    #[inline(always)]
+    pub fn max(self, other: &Self) -> Self
+    where
+        T: MinMax + Clone,
+    {
+        self.combine(other, MinMax::max)
     }
 }
 impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
@@ -274,22 +295,6 @@ impl<const DIMENSIONS: usize, T> Vector<DIMENSIONS, T> {
     {
         let w = w.to_vector();
         self.clone() - w.clone() * self.dot(w)
-    }
-    /// Element-wise min
-    #[inline(always)]
-    pub fn min(self, other: &Self) -> Self
-    where
-        T: MinMax + Clone,
-    {
-        self.combine(other, MinMax::min)
-    }
-    /// Element-wise max
-    #[inline(always)]
-    pub fn max(self, other: &Self) -> Self
-    where
-        T: MinMax + Clone,
-    {
-        self.combine(other, MinMax::max)
     }
 }
 impl<T> Vector<3, T> {
@@ -448,6 +453,20 @@ macro_rules! impl_vec_op {
                     self.to_vector().combine(&rhs, $Trait::$method)
                 }
             }
+
+            // Point
+            // operation with vector -> returns point
+            impl<const DIMENSIONS: usize, T> $Trait<Vector<DIMENSIONS, T>> for Point<DIMENSIONS, T>
+            where
+                T: $Trait + Clone,
+                T::Output: Clone
+            {
+                type Output = Point<DIMENSIONS, T::Output>;
+                #[inline(always)]
+                fn $method(self, rhs: Vector<DIMENSIONS, T>) -> Self::Output {
+                    Point::new(self.to_vector().combine(&rhs, $Trait::$method).into_inner())
+                }
+            }
         )*
     };
 }
@@ -469,8 +488,14 @@ macro_rules! access_vec {
         )*
     };
 }
-access_vec!(Vector, x => 0, y => 1, z => 2, w => 3);
-access_vec!(NormalizedVector, x => 0, y => 1, z => 2, w => 3);
+macro_rules! access_xyzw {
+    ($($vector:ident),+) => {
+        $(
+            access_vec!($vector, x => 0, y => 1, z => 2, w => 3);
+        )+
+    };
+}
+access_xyzw!(Vector, NormalizedVector, Point);
 access_vec!(Color, r => 0, g => 1, b => 2, a => 3);
 
 impl<const DIMENSIONS: usize, T> Color<DIMENSIONS, T> {
@@ -513,9 +538,7 @@ where
     }
 }
 
-pub type Vec3 = Vector<3, f32>;
-
-impl<Usage: VectorOrColor, T: FromStr<Err: Debug>> From<&str> for BaseVector<3, T, Usage> {
+impl<Usage: NonNormalVector, T: FromStr<Err: Debug>> From<&str> for BaseVector<3, T, Usage> {
     fn from(value: &str) -> Self {
         let mut values = value.split(' ').map(|value| value.parse().unwrap());
 
@@ -616,4 +639,13 @@ where
     }
 }
 
-pub type NormalizedVec3 = NormalizedVector<3, f32>;
+impl<const DIMENSIONS: usize, T> Point<DIMENSIONS, T> {
+    /// Returns the vector pointing from `self` to `other`
+    pub fn vector_to(self, other: Self) -> Vector<DIMENSIONS, T::Output>
+    where
+        T: Sub + Clone,
+        T::Output: Clone,
+    {
+        (other - self.to_vector()).to_vector()
+    }
+}

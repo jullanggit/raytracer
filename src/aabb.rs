@@ -1,4 +1,4 @@
-use crate::vec3::{Lerp, MinMax, New as _, Sqrt, Vector};
+use crate::vec3::{Lerp, MinMax, New as _, Point, Sqrt, Vector};
 use std::{
     array,
     cmp::Ordering,
@@ -7,11 +7,11 @@ use std::{
 
 /// An axis-aligned bounding-box generic over its dimensionality and containing type
 pub struct Aabb<const DIMENSIONS: usize, T: Copy> {
-    min: Vector<DIMENSIONS, T>,
-    max: Vector<DIMENSIONS, T>,
+    min: Point<DIMENSIONS, T>,
+    max: Point<DIMENSIONS, T>,
 }
 impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
-    pub fn new(min: Vector<DIMENSIONS, T>, max: Vector<DIMENSIONS, T>) -> Self
+    pub fn new(min: Point<DIMENSIONS, T>, max: Point<DIMENSIONS, T>) -> Self
     where
         T: MinMax,
     {
@@ -87,7 +87,7 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
     where
         T: Add<Output = T> + Sub<Output = T>,
     {
-        let delta = Vector::new([delta; _]);
+        let delta = Vector::new([delta; DIMENSIONS]);
         self.min = self.min - delta;
         self.max = self.max + delta;
     }
@@ -95,7 +95,7 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
     where
         T: Sub<Output: Copy>,
     {
-        self.max - self.min
+        self.min.vector_to(self.max)
     }
     /// index of the dimensions with the biggest value
     pub fn max_dimension(&self) -> <T as Sub>::Output
@@ -120,11 +120,11 @@ impl<const DIMENSIONS: usize, T: Copy> Aabb<DIMENSIONS, T> {
     }
     /// The position of `point` relative to the corners.
     /// min = 0, max = 1
-    pub fn offset(&self, point: Vector<DIMENSIONS, T>) -> Vector<DIMENSIONS, T>
+    pub fn offset(&self, point: Point<DIMENSIONS, T>) -> Vector<DIMENSIONS, T>
     where
         T: Sub<Output = T> + PartialOrd + Div<Output = T>,
     {
-        let mut out = point - self.min;
+        let mut out = self.min.vector_to(point);
         for index in 0..DIMENSIONS {
             if self.max.inner()[index] > self.min.inner()[index] {
                 out.inner_mut()[index] =
@@ -150,12 +150,12 @@ impl<T: Copy> Aabb<2, T> {
     }
 }
 impl<T: Copy> Aabb<3, T> {
-    pub fn corner(&self, corner: usize) -> Vector<3, T>
+    pub fn corner(&self, corner: usize) -> Point<3, T>
     where
         T: Clone,
     {
         let mut bit = 1;
-        Vector::new([Vector::x, Vector::y, Vector::z].map(|f| {
+        Point::new([Point::x, Point::y, Point::z].map(|f| {
             let v = f(if corner & bit == 0 {
                 &self.min
             } else {
@@ -185,12 +185,12 @@ pub trait Union<T> {
     /// Grow the bounding box to include `value`
     fn union(&mut self, value: T);
 }
-impl<const DIMENSIONS: usize, T: Copy + MinMax> Union<Vector<DIMENSIONS, T>>
+impl<const DIMENSIONS: usize, T: Copy + MinMax> Union<Point<DIMENSIONS, T>>
     for Aabb<DIMENSIONS, T>
 {
-    fn union(&mut self, value: Vector<DIMENSIONS, T>) {
-        self.min = self.min.min(&value);
-        self.max = self.max.max(&value);
+    fn union(&mut self, point: Point<DIMENSIONS, T>) {
+        self.min = self.min.min(&point);
+        self.max = self.max.max(&point);
     }
 }
 impl<const DIMENSIONS: usize, T: Copy + MinMax> Union<Self> for Aabb<DIMENSIONS, T> {

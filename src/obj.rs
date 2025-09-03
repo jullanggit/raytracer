@@ -5,7 +5,7 @@ use crate::{
     indices::Indexer,
     material::{ColorKind, Material, MaterialKind},
     shapes::{MaterialIndexer, NormalsTextureCoordinates, Triangle},
-    vec3::{Color, New as _, NormalizedVec3, Vec3},
+    vec3::{Color, New as _, NormalizedVector3, Point3, Vector3},
 };
 
 #[inline(always)]
@@ -13,7 +13,7 @@ pub fn parse(
     path: &str,
     materials: &mut Interner<Material>,
     texture_coordinates_out: &mut Vec<[[f32; 2]; 3]>,
-    normals_out: &mut Vec<[NormalizedVec3; 3]>,
+    normals_out: &mut Vec<[NormalizedVector3; 3]>,
     barycentric_precomputed: &mut Vec<[f32; 4]>,
 ) -> Vec<Triangle> {
     let string = fs::read_to_string(path).expect("Failed to read obj file");
@@ -35,7 +35,7 @@ pub fn parse(
 
     let name_index = parse_materials(materials, material_file.as_deref(), parent_path);
 
-    let vertices: Vec<Vec3> = lines
+    let vertices: Vec<Point3> = lines
         .clone()
         .filter(|line| line.starts_with("v "))
         .map(|line| line[2..].trim().into())
@@ -55,7 +55,7 @@ pub fn parse(
         })
         .collect();
 
-    let normals: Vec<Vec3> = lines
+    let normals: Vec<Vector3> = lines
         .clone()
         .filter(|line| line.starts_with("vn"))
         .map(|line| line[3..].trim().into())
@@ -133,15 +133,15 @@ pub fn parse(
                         {
                             let normal_index = normals_out.len();
 
-                            normals_out.push([normal1, normal2, normal3].map(Vec3::normalize));
+                            normals_out.push([normal1, normal2, normal3].map(Vector3::normalize));
 
                             Some(Indexer::new(normal_index.try_into().unwrap()))
                         } else {
                             None
                         };
                         let mut barycentric_precomputed_index = || {
-                            let e1 = vertex2 - vertex1;
-                            let e2 = vertex3 - vertex1;
+                            let e1 = vertex1.vector_to(vertex2);
+                            let e2 = vertex1.vector_to(vertex3);
 
                             let (d00, d01, d11) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
 
