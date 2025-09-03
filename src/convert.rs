@@ -30,24 +30,35 @@ pub trait TryConvertSpec<Output> {
     fn try_convert(self) -> Option<Output>;
 }
 
-macro_rules! FloatAsConvert {
-    ($head:ident, $($tail:ident),+) => {
+// convert primitive number types using 'as' if neither From nor TryFrom are available.
+macro_rules! AsConvert {
+    ($head:ident $(,)? $($tail:ident),*) => {
         $(
-            FloatAsConvertInner!($head, $tail);
-            FloatAsConvertInner!($tail, $head);
-        )+
+            AsConvertInner!($head, $tail);
+            AsConvertInner!($tail, $head);
+        )*
+        AsConvert!($($tail),*);
     };
+    () => {}
 }
-macro_rules! FloatAsConvertInner {
+macro_rules! AsConvertInner {
     ($a:ident, $b:ident) => {
         impl TryConvertSpec<$b> for $a {
+            #[allow(clippy::allow_attributes)]
+            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_sign_loss)]
+            #[allow(clippy::cast_lossless)] // we actually do use From if it is available :)
+            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_possible_wrap)]
             fn try_convert(self) -> Option<$b> {
                 Some(self as $b)
             }
         }
     };
 }
-FloatAsConvert!(f16, f32, f64, f128);
+AsConvert!(
+    f16, f32, f64, f128, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
+);
 
 impl<T, O> TryConvertSpec<O> for T {
     // failing impl, if neither are implemented. Tries to link to a (hopefully) nonexistent symbol.
