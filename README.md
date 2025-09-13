@@ -16,4 +16,10 @@ A zero-dependency raytracer, following first matklad's [raytracer-construction-k
 
 ## Usage
 - if you dont want to pay the price for expensive normal calculations, remove all vn lines from the .obj file
+## Images
+![_](images/semi-textured-breakfast-room.jpg)
+![_](images/textured_tree.jpg)
+![_](images/metal.jpg)
+![_](images/red_sphere.jpg)
+
 ![brainmademark](https://brainmade.org/black-logo.svg)
