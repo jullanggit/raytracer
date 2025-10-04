@@ -10,8 +10,11 @@ A zero-dependency raytracer, following first matklad's [raytracer-construction-k
 - Bounding Volume Hierarchies
 - Multithreading
 - Memory mapped image
+
   -> Live preview
+
   -> Continue rendering
+
   -> Infinitely large images
 
 ## Usage
